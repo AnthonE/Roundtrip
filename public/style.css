@@ -1,0 +1,48 @@
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: #0b0f2e;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
+body {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+
+#game {
+  position: fixed;
+  inset: 0;
+  display: block;
+  touch-action: none;
+  image-rendering: pixelated;
+  image-rendering: crisp-edges;
+  cursor: pointer;
+}
+
+#nick {
+  position: fixed;
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0 0.4em;
+  border: 0;
+  outline: none;
+  border-radius: 0;
+  background: transparent;
+  color: #ffffff;
+  caret-color: #ff6fb5;
+  font-family: ui-monospace, 'SFMono-Regular', Menlo, Consolas, 'Courier New', monospace;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-align: center;
+  text-transform: uppercase;
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+#nick[hidden] {
+  display: none;
+}

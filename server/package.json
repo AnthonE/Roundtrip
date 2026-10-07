@@ -1,0 +1,20 @@
+{
+  "name": "roundtrip-server",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Leaderboard API for ROUNDTRIP: node:http + Redis + MongoDB, nothing else.",
+  "type": "module",
+  "main": "server.js",
+  "engines": {
+    "node": ">=20.12"
+  },
+  "scripts": {
+    "start": "node server.js",
+    "dev": "STORE=memory DEV_STATIC=1 node server.js",
+    "test": "node --test test/*.test.js"
+  },
+  "dependencies": {
+    "mongodb": "^7.0.0",
+    "redis": "^6.0.0"
+  }
+}

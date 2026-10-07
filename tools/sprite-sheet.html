@@ -1,0 +1,22 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>ROUNDTRIP sprite sheet</title>
+<style>body{margin:0;background:#18205a}canvas{image-rendering:pixelated}</style>
+<canvas id="c"></canvas>
+<script type="module">
+import { bakeSprites } from '../public/js/sprites.js';
+const S = bakeSprites();
+const c = document.getElementById('c');
+const k = 8;
+const list = [...Object.values(S.girl), ...S.coin, ...Object.values(S.items), S.candle, S.moon, ...Object.values(S.icons)];
+c.width = 1400; c.height = 520;
+const g = c.getContext('2d');
+g.imageSmoothingEnabled = false;
+let x = 8, y = 8, rowH = 0;
+for (const s of list) {
+  if (x + s.width * k > c.width) { x = 8; y += rowH + 8; rowH = 0; }
+  g.drawImage(s, x, y, s.width * k, s.height * k);
+  x += s.width * k + 12; rowH = Math.max(rowH, s.height * k);
+}
+document.title = 'ready';
+</script>

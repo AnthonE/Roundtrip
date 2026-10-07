@@ -1,0 +1,81 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>ROUNDTRIP asset maker</title>
+<!--
+  Renders the PWA icon and the social preview from the game's own art.
+  Open tools/make-assets.html?asset=icon&size=512 or ?asset=og and screenshot
+  the canvas (see README: "Regenerating the icon and preview image").
+-->
+<style>html,body{margin:0;background:#18205a;overflow:hidden}canvas{display:block}</style>
+<canvas id="c"></canvas>
+<script type="module">
+import { bakeSprites, S, GIRL_ANCHOR } from '../public/js/sprites.js';
+import { initGlobe, drawGlobe, GLOBE_R } from '../public/js/globe.js';
+import { drawText, drawBandedText, textWidth } from '../public/js/font.js';
+
+const q = new URLSearchParams(location.search);
+const asset = q.get('asset') || 'icon';
+bakeSprites();
+initGlobe();
+
+const c = document.getElementById('c');
+const out = c.getContext('2d');
+// Draw at pixel resolution, then scale up with nearest neighbour.
+const low = document.createElement('canvas');
+const g = low.getContext('2d');
+g.imageSmoothingEnabled = false;
+
+function sky(w, h) {
+  g.fillStyle = '#18205a';
+  g.fillRect(0, 0, w, h);
+  g.fillStyle = '#232f74';
+  for (let x = 6; x < w; x += 34) g.fillRect(x, 0, 1, h);
+  for (let y = 10; y < h; y += 34) g.fillRect(0, y, w, 1);
+  let s = 7;
+  const rnd = () => ((s = (s * 16807) % 2147483647) / 2147483647);
+  for (let i = 0; i < (w * h) / 200; i++) {
+    g.fillStyle = ['#ffffff', '#ffe9a8', '#a8f0ff', '#ffb3d9'][i % 4];
+    g.fillRect(Math.floor(rnd() * w), Math.floor(rnd() * h), 1, 1);
+  }
+}
+
+if (asset === 'icon') {
+  const size = +(q.get('size') || 512);
+  const L = 64; // icon is 64 px of pixel art
+  low.width = L; low.height = L;
+  sky(L, L);
+  // globe peeking up from the bottom, her standing on it
+  const cx = L / 2, cy = L - 4 + GLOBE_R - 22;
+  drawGlobe(g, cx, cy, 0);
+  g.drawImage(S.girl.idle, Math.round(cx - GIRL_ANCHOR.x), Math.round(cy - GLOBE_R - GIRL_ANCHOR.y));
+  g.drawImage(S.coin[0], 10, 12);
+  g.drawImage(S.coin[1], 46, 18);
+  c.width = size; c.height = size;
+  out.imageSmoothingEnabled = false;
+  out.drawImage(low, 0, 0, size, size);
+} else {
+  const W = 300, H = 158; // 1200×630 at 4×
+  low.width = W; low.height = H;
+  sky(W, H);
+  const cx = W / 2, cy = H + GLOBE_R - 52;
+  drawGlobe(g, cx, cy, 0.35);
+  g.drawImage(S.girl.run0, Math.round(cx - GIRL_ANCHOR.x), Math.round(cy - GLOBE_R - GIRL_ANCHOR.y));
+  g.drawImage(S.coin[0], cx + 32, cy - GLOBE_R - 30);
+  g.drawImage(S.coin[3], cx + 44, cy - GLOBE_R - 34);
+  g.drawImage(S.items.milk, cx - 60, cy - GLOBE_R - 30);
+  g.drawImage(S.moon, W - 40, 12);
+  const word = 'ROUNDTRIP';
+  const sc = 4;
+  g.fillStyle = '#39ff88'; g.fillRect(cx - 100, 22 + 2 * sc, 90, sc);
+  g.fillStyle = '#b34dff'; g.fillRect(cx - 10, 22 + 5 * sc, 110, sc);
+  drawText(g, word, cx, 22 + sc, { scale: sc, align: 'center', color: '#140f2e' });
+  drawText(g, word, cx - 1, 22, { scale: sc, align: 'center', color: '#39ff88' });
+  drawText(g, word, cx + 1, 22, { scale: sc, align: 'center', color: '#b34dff' });
+  drawBandedText(g, word, cx, 22, sc, ['#fff6a8', '#ffe14d', '#ffd166', '#ffb3c7', '#ff8fc2', '#ff6fb5', '#e65aa6']);
+  drawText(g, "RUN THE GLOBE. DON'T ROUNDTRIP.", cx, 60, { align: 'center', color: '#ffffff', outline: '#140f2e' });
+  c.width = 1200; c.height = 630;
+  out.imageSmoothingEnabled = false;
+  out.drawImage(low, 0, 0, 1200, 632);
+}
+document.title = 'ready';
+</script>

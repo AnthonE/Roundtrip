@@ -1,0 +1,34 @@
+# sudo cp deploy/systemd/roundtrip-api.service /etc/systemd/system/
+# sudo systemctl daemon-reload && sudo systemctl enable --now roundtrip-api
+# Logs: journalctl -u roundtrip-api -f
+
+[Unit]
+Description=ROUNDTRIP leaderboard API
+After=network-online.target redis-server.service redis.service mongod.service
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=roundtrip
+Group=roundtrip
+WorkingDirectory=/opt/roundtrip/server
+EnvironmentFile=/opt/roundtrip/server/.env
+ExecStart=/usr/bin/env node server.js
+Restart=always
+RestartSec=2
+
+# Hardening: the API only needs the network and read access to its own code.
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+PrivateDevices=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryMax=256M
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,13 @@
+{
+  "name": "roundtrip",
+  "version": "1.0.0",
+  "private": true,
+  "description": "ROUNDTRIP: a tiny pixel browser game for the song \"roundtrip\" by bubblegum.",
+  "type": "module",
+  "scripts": {
+    "setup": "npm --prefix server ci",
+    "dev": "npm --prefix server run dev",
+    "start": "npm --prefix server start",
+    "test": "npm --prefix server test"
+  }
+}
