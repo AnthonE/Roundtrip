@@ -7,8 +7,8 @@ import { World, moonPos } from '../game.js';
 import { S, ITEM_LABEL, ITEM_COLOR } from '../sprites.js';
 import { drawBackground } from '../background.js';
 import { input } from '../input.js';
-import { sfx, tapeStop, playMusic, pauseMusic, resumeMusic } from '../audio.js';
-import { clearFx, updateFx, drawFx, burst, popText, sparkleTrail, shake, glitch } from '../fx.js';
+import { sfx, tapeStop, playMusic, pauseMusic, resumeMusic, setMuffle, musicHiccup, haptic } from '../audio.js';
+import { clearFx, updateFx, drawFx, burst, popText, sparkleTrail, shake, glitch, dust, ring, flyTo, vignette } from '../fx.js';
 import { Button, pressButtons, drawPanel } from '../ui.js';
 import { director } from '../director.js';
 import { submitLevel } from '../api.js';
@@ -28,7 +28,12 @@ export const play = {
     this.card = null;
     this.bank = null;
     this.trailT = 0;
+    this.ghostT = 0;
+    this.maxShown = false;
+    // HUD "punch" timers: a number flashes white and hops when it changes
+    this.punch = { unreal: 0, mult: 0, banked: 0, pips: [0, 0, 0, 0, 0] };
     clearFx();
+    sfx.ready();
     this.world = new World({ level, seed, onEvent: (type, d) => this.onWorld(type, d) });
     if (!director.run) director.newRun();
     this.run = director.run;
@@ -37,6 +42,7 @@ export const play = {
 
   exit() {
     this.paused = false;
+    setMuffle(0);
   },
 
   glitch(k, dur) {
@@ -46,70 +52,119 @@ export const play = {
 
   onWorld(type, d) {
     const w = this.world;
+    const P = this.punch;
     switch (type) {
       case 'jump':
         sfx.jump();
+        dust(d.x, d.y, d.theta, 4, 26);
         break;
-      case 'coin':
-        sfx.coin(d.mult);
-        popText(d.x, d.y - 8, `+${d.value}`, d.mult > 1 ? COLORS.pink : COLORS.yellow);
+      case 'highJump':
+        sfx.highJump();
+        for (let i = 0; i < 4; i++) sparkleTrail(d.x + (Math.random() - 0.5) * 8, d.y + 2, i % 2 ? COLORS.cyan : '#ffffff');
+        break;
+      case 'touchdown':
+        sfx.land();
+        dust(d.x, d.y, d.theta, d.high ? 8 : 5, d.high ? 40 : 28);
+        break;
+      case 'coin': {
+        sfx.coin(d.mult, d.combo);
+        popText(d.x, d.y - 8, `+${d.value}`, d.mult > 1 ? COLORS.pink : COLORS.yellow, { life: 0.6 });
         burst(d.x, d.y, ['#ffd21f', '#ffffff'], 5, 40);
+        flyTo(S.coin[0], d.x, d.y, 10, 16, () => (P.unreal = 0.15), 0.42);
         break;
+      }
       case 'item': {
         sfx.item();
+        haptic(15);
         this.hitStop = FX.hitStop;
         burst(d.x, d.y, [ITEM_COLOR[d.kind], '#ffffff', COLORS.pink, COLORS.cyan], 18, 80);
         const c = w.playerCenter();
+        ring(c.x, c.y, ITEM_COLOR[d.kind], 30 * w.player.scale, 0.4);
+        ring(c.x, c.y, '#ffffff', 18 * w.player.scale, 0.3);
         popText(c.x, c.y - 24 * w.player.scale, `${ITEM_LABEL[d.kind]}!`, ITEM_COLOR[d.kind]);
         if (d.items < ITEMS_PER_LEVEL) popText(c.x, c.y - 24 * w.player.scale + 10, 'SELF-CARE +1', '#ffffff', { life: 1 });
+        P.pips[d.items - 1] = 0.35;
+        P.unreal = 0.15;
         break;
       }
       case 'land':
-        if (d.streak >= 1 && d.streak <= 4) {
+        if (d.multUp) {
           const c = w.playerCenter();
-          popText(c.x + 14, c.y - 10, `x${w.mult}`, COLORS.pink, { life: 0.5 });
+          P.mult = 0.25;
+          if (d.mult === 5 && !this.maxShown) {
+            this.maxShown = true;
+            sfx.maxMult();
+            haptic(20);
+            popText(c.x, c.y - 22 * w.player.scale - 6, 'MAX x5!', [COLORS.yellow, COLORS.pink, COLORS.cyan, COLORS.neonGreen, '#ffffff'], { life: 1.1 });
+            burst(c.x, c.y - 10, [COLORS.yellow, COLORS.pink, COLORS.cyan], 12, 60);
+          } else {
+            sfx.multUp(d.mult);
+            popText(c.x + 14, c.y - 10, `x${d.mult}`, COLORS.pink, { life: 0.5 });
+          }
         }
         break;
       case 'lag':
         sfx.lag();
+        musicHiccup();
+        haptic(25);
         this.glitch(0.4, 0.28);
+        this.ghostT = 0.28;
         shake(1.5);
         popText(d.x, d.y - 20, 'LAG!', COLORS.neonGreen);
+        this.maxShown = false;
         break;
       case 'hit':
         sfx.hit();
+        musicHiccup();
+        haptic(60);
+        this.hitStop = 0.06;
         this.glitch(0.55, 0.35);
+        this.ghostT = 0.35;
         shake(3);
         burst(d.x, d.y, [COLORS.red, '#ff9aa6', '#ffffff'], 14, 70);
         popText(d.x, d.y - 16, 'DUMP!', COLORS.red);
+        this.maxShown = false;
         break;
       case 'cleared':
+        sfx.dodge();
         popText(d.x, d.y, 'DODGED', COLORS.cyan, { life: 0.5 });
+        for (let i = 0; i < 3; i++) sparkleTrail(d.x + (i - 1) * 4, d.y + 4, COLORS.cyan);
         break;
       case 'danger':
-        sfx.danger();
+        sfx.danger(d.depth);
         this.glitch(0.12, 0.1);
         break;
       case 'moonReady':
         sfx.moonReady();
+        haptic(20);
         break;
       case 'leap':
         sfx.leap();
+        dust(d.x, d.y, w.player.theta, 10, 45);
         break;
       case 'moon': {
         sfx.moon();
+        haptic([20, 30, 20]);
+        shake(2);
         const m = moonPos();
         burst(m.x, m.y, ['#fff3c4', COLORS.yellow, COLORS.pink, COLORS.cyan], 26, 90);
+        ring(m.x, m.y, '#fff3c4', 34, 0.45);
+        dust(d.x, d.y, 0, 8, 30);
         this.startBank();
         break;
       }
       case 'roundtrip':
         sfx.roundtrip();
         tapeStop();
+        haptic([70, 40, 140]);
         this.glitch(1, 0.75);
         shake(4);
         break;
+      case 'drop':
+        sfx.drop();
+        break;
       case 'gone':
+        sfx.sad();
         this.showCard();
         break;
     }
@@ -222,11 +277,30 @@ export const play = {
       const ticks = Math.floor(k * 12);
       if (ticks > b.ticked) {
         b.ticked = ticks;
-        sfx.bank();
+        if (ticks < 12) sfx.bank();
+        else {
+          sfx.kaching();
+          this.punch.banked = 0.3;
+          const { W, H } = view;
+          burst(W / 2, Math.round(H * 0.2) + 60, ['#ffd21f', '#ffffff', COLORS.pink], 18, 90);
+        }
       }
     }
+    const P = this.punch;
+    P.unreal = Math.max(0, P.unreal - dt);
+    P.mult = Math.max(0, P.mult - dt);
+    P.banked = Math.max(0, P.banked - dt);
+    P.pips = P.pips.map((v) => Math.max(0, v - dt));
     if (this.paused) return;
     this.glitchT = Math.max(0, this.glitchT - dt);
+    this.ghostT = Math.max(0, this.ghostT - dt);
+    const w0 = this.world;
+    setMuffle(w0.phase === 'play' ? w0.dangerDepth() * 0.85 + (w0.player.theta < -PLAYER.danger ? 0.15 : 0) : 0);
+    if (w0.moonRise > 0.3 && w0.phase === 'play' && Math.random() < dt * 10) {
+      const m = moonPos();
+      const a = Math.random() * Math.PI * 2;
+      sparkleTrail(m.x + Math.cos(a) * 22, m.y + Math.sin(a) * 22, Math.random() < 0.5 ? '#fff3c4' : COLORS.yellow);
+    }
     if (this.hitStop > 0) {
       this.hitStop -= dt;
       this.pressed = false;
@@ -252,8 +326,11 @@ export const play = {
     const w = this.world;
     const { W, H } = view;
     drawBackground(ctx, t, w.G * 30);
-    w.draw(ctx, t);
+    w.draw(ctx, t, { ghost: this.ghostT > 0 ? 2 : 0 });
     drawFx(ctx);
+    if (w.phase === 'play' && w.player.theta < -PLAYER.danger) {
+      vignette(ctx, (0.35 + 0.65 * w.dangerDepth()) * (0.6 + 0.4 * Math.sin(t * (8 + 8 * w.dangerDepth()))));
+    }
 
     // glitch pass (gameplay screens only)
     let k = this.glitchT > 0 ? this.glitchK : 0;
@@ -271,7 +348,9 @@ export const play = {
     if (w.phase === 'play') this.drawHud(ctx, t);
     if (w.phase === 'play' && w.player.theta < -PLAYER.danger && blink(t, 4)) {
       const c = w.playerCenter();
-      drawText(ctx, 'SLIPPING!', c.x, c.y - 18 * w.player.scale - 12, { align: 'center', color: COLORS.red, outline: INK });
+      const half = textWidth('SLIPPING!') / 2 + 3;
+      const x = Math.max(half, Math.min(W - half, c.x));
+      drawText(ctx, 'SLIPPING!', x, c.y - 18 * w.player.scale - 12, { align: 'center', color: COLORS.red, outline: INK });
     }
     if (this.bank) this.drawBank(ctx, t);
     if (this.card) this.drawCard(ctx, t, dt);
@@ -285,28 +364,36 @@ export const play = {
   drawHud(ctx, t) {
     const w = this.world;
     const { W, H } = view;
+    const P = this.punch;
     drawText(ctx, `BANKED ${formatNumber(this.run.banked)}`, 4, 4, { color: '#ffffff', shadow: INK });
     const ur = `+${formatNumber(w.levelScore)}`;
-    drawText(ctx, ur, 4, 13, { color: COLORS.neonGreen, shadow: INK });
+    drawText(ctx, ur, 4, P.unreal > 0 ? 12 : 13, { color: P.unreal > 0 ? '#ffffff' : COLORS.neonGreen, shadow: INK });
     let x = 4 + textWidth(ur) + 5;
     if (W >= 300) {
       drawText(ctx, 'UNREALIZED', x, 13, { color: '#2fb86a', shadow: INK });
       x += textWidth('UNREALIZED') + 5;
     }
-    if (w.mult > 1) drawText(ctx, `x${w.mult}`, x, 13, { color: COLORS.pink, shadow: INK });
+    if (w.mult > 1) {
+      const color = P.mult > 0 ? '#ffffff' : w.mult === 5 ? [COLORS.pink, COLORS.yellow, COLORS.cyan][Math.floor(t * 8) % 3] : COLORS.pink;
+      drawText(ctx, `x${w.mult}`, x, P.mult > 0 ? 12 : 13, { color, shadow: INK });
+    }
 
     // self-care meter
     const step = 11;
     const x0 = W - 16 - ITEMS_PER_LEVEL * step;
     for (let i = 0; i < ITEMS_PER_LEVEL; i++) {
-      if (i < w.items) ctx.drawImage(S.items[w.itemKinds[i]], x0 + i * step, 3);
+      if (i < w.items) {
+        const pop = P.pips[i] > 0;
+        ctx.drawImage(pop && P.pips[i] > 0.25 ? S.itemsWhite[w.itemKinds[i]] : S.items[w.itemKinds[i]], x0 + i * step, pop ? 1 : 3);
+      }
       else ctx.drawImage(S.icons.pip, x0 + i * step + 1, 4);
     }
     drawText(ctx, `LV ${this.level}`, W - 4, 16, { align: 'right', color: COLORS.lavender, shadow: INK });
 
     // level intro
     if (!this.paused && this.t < 2.6 && (this.t > 2.0 ? blink(this.t, 5) : true)) {
-      const y = Math.round(H * 0.24);
+      const slide = Math.max(0, 1 - this.t / 0.25);
+      const y = Math.round(H * 0.24 - slide * slide * 30);
       drawText(ctx, `LEVEL ${this.level}`, W / 2, y, { align: 'center', color: COLORS.yellow, outline: INK, scale: 2 });
       const lines =
         this.level === 1
@@ -336,7 +423,12 @@ export const play = {
     drawText(ctx, `UNREALIZED  +${formatNumber(b.unreal)}`, cx, y + 33, { align: 'center', color: '#ffffff' });
     drawText(ctx, `LEVEL BONUS +${formatNumber(b.bonus)}`, cx, y + 43, { align: 'center', color: '#ffffff' });
     const k = Math.min(1, Math.max(0, (b.t - 0.5) / 1.1));
-    drawText(ctx, `BANKED ${formatNumber(b.from + b.add * k)}`, cx, y + 57, { align: 'center', color: COLORS.pink, scale: 1 });
+    const done = this.punch.banked > 0;
+    drawText(ctx, `BANKED ${formatNumber(b.from + b.add * k)}`, cx, y + 57 - (done ? 1 : 0), {
+      align: 'center',
+      color: done ? '#ffffff' : COLORS.pink,
+      scale: 1,
+    });
     if (b.t > 1.2 && blink(t)) drawText(ctx, 'TAP TO CONTINUE', cx, y + 71, { align: 'center', color: COLORS.lavender });
   },
 

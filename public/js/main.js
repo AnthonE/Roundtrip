@@ -4,8 +4,8 @@ import { initGlobe } from './globe.js';
 import { bakeSprites, S } from './sprites.js';
 import { bakeBackground } from './background.js';
 import { initInput, drainInput, onGesture } from './input.js';
-import { toggleMute, isMuted, unlockAudio, musicElement } from './audio.js';
-import { shakeOffset } from './fx.js';
+import { toggleMute, isMuted, unlockAudio, enableHaptics, musicElement } from './audio.js';
+import { shakeOffset, startTransition, drawTransition } from './fx.js';
 import { PLAYER } from './config.js';
 import { director } from './director.js';
 import { title } from './scenes/title.js';
@@ -20,9 +20,16 @@ bakeSprites();
 initGlobe();
 bakeBackground();
 initInput(canvas);
-onGesture(unlockAudio);
+onGesture((tap) => {
+  unlockAudio();
+  if (tap) enableHaptics();
+});
 
 director.scenes = { title, play, nickname };
+let drawnOnce = false;
+director.onSwitch = () => {
+  if (drawnOnce) startTransition(ctx);
+};
 
 // Mute toggle in the top-right corner of every screen.
 const MUTE = { w: 13, h: 11 };
@@ -74,6 +81,8 @@ function frame(now) {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
   ctx.globalAlpha = 1;
   director.scene.draw(ctx, time, dt);
+  drawTransition(ctx, dt);
+  drawnOnce = true;
   const r = muteRect();
   ctx.drawImage(isMuted() ? S.icons.soundOff : S.icons.soundOn, r.x + 3, r.y + 2);
   const [sx, sy] = shakeOffset();

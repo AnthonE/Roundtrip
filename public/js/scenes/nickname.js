@@ -9,6 +9,7 @@ import { director } from '../director.js';
 import { sfx, playMusic } from '../audio.js';
 import { fetchBoard, claimName, cleanNick, rememberNick, savedNick } from '../api.js';
 import { drawPoster } from './common.js';
+import { clearFx, updateFx, drawFx, burst, ring } from '../fx.js';
 
 const INK = COLORS.ink;
 const ROW_H = 9;
@@ -24,6 +25,7 @@ export const nickname = {
     this.statusColor = COLORS.lavender;
     this.saving = false;
     this.el = document.getElementById('nick');
+    clearFx();
     const run = director.run;
     this.showInput = mode !== 'board' && !(run && run.named);
 
@@ -132,10 +134,22 @@ export const nickname = {
     // No rank back means the server never banked this run (e.g. a level failed its checks).
     this.status = rank ? `YOU'RE #${rank}!` : 'SCORE NOT VERIFIED';
     this.statusColor = rank ? COLORS.yellow : COLORS.red;
+    if (rank) this.celebrate(rank);
+  },
+
+  // Confetti from the status line; a bigger show for the top 3.
+  celebrate(rank) {
+    sfx.rank(rank === 1);
+    const { cx } = this.layout();
+    const y = this.statusY ?? view.H * 0.3;
+    const colors = [COLORS.yellow, COLORS.pink, COLORS.cyan, COLORS.neonGreen, '#ffffff'];
+    burst(cx, y, colors, rank <= 3 ? 40 : 18, rank <= 3 ? 110 : 70);
+    if (rank <= 3) ring(cx, y + 3, COLORS.yellow, 40, 0.5);
   },
 
   update(dt) {
     this.t += dt;
+    updateFx(dt);
   },
 
   onDown(ev) {
@@ -200,6 +214,7 @@ export const nickname = {
     for (const b of this.buttons) b.draw(ctx, dt);
     y += 20;
 
+    this.statusY = y;
     if (this.status) {
       drawText(ctx, this.status, cx, y, { align: 'center', color: this.statusColor, outline: INK });
     }
@@ -209,6 +224,7 @@ export const nickname = {
     const by = L.boardY ?? y;
     const room = L.wide ? view.H - by - 8 : L.globeTop - 30 - by - 16;
     this.drawBoard(ctx, L.boardX, by, run, Math.max(3, Math.min(10, Math.floor(room / ROW_H))));
+    drawFx(ctx);
   },
 
   drawBoard(ctx, x, y, run, maxRows = 10) {

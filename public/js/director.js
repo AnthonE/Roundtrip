@@ -7,7 +7,10 @@ export const director = {
   name: '',
   run: null,
 
+  onSwitch: null, // set by main: snapshots the outgoing frame for the dissolve
+
   go(name, data = {}) {
+    if (this.scene) this.onSwitch?.();
     this.scene?.exit?.();
     this.name = name;
     this.scene = this.scenes[name];

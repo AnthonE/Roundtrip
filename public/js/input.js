@@ -12,8 +12,8 @@ export const input = {
 let pointerId = null;
 let gestureHook = () => {};
 
-// Runs synchronously inside the browser's own event handler. iOS only lets
-// audio start from there, not from our next animation frame.
+// Runs synchronously inside the browser's own event handler (with tap = true for
+// pointers). iOS only lets audio start from there, not from our next animation frame.
 export function onGesture(fn) {
   gestureHook = fn;
 }
@@ -23,7 +23,7 @@ export function initInput(canvas) {
     e.preventDefault();
     if (pointerId !== null) return;
     pointerId = e.pointerId;
-    gestureHook();
+    gestureHook(true);
     canvas.setPointerCapture?.(e.pointerId);
     const p = toVirtual(e.clientX, e.clientY);
     input.held = true;
@@ -42,7 +42,7 @@ export function initInput(canvas) {
 
   window.addEventListener('keydown', (e) => {
     if (e.target instanceof HTMLInputElement) return;
-    gestureHook();
+    gestureHook(false);
     if (JUMP_KEYS.has(e.code)) {
       e.preventDefault();
       if (e.repeat) return;

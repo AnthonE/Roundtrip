@@ -35,11 +35,13 @@ export function makeRng(seed) {
   };
 }
 
+// scale: a number, or [sx, sy] for squash and stretch.
 export function drawSprite(ctx, img, x, y, angle = 0, scale = 1, ax = img.width / 2, ay = img.height / 2) {
+  const [sx, sy] = Array.isArray(scale) ? scale : [scale, scale];
   ctx.save();
   ctx.translate(Math.round(x), Math.round(y));
   if (angle) ctx.rotate(angle);
-  if (scale !== 1) ctx.scale(scale, scale);
+  if (sx !== 1 || sy !== 1) ctx.scale(sx, sy);
   ctx.drawImage(img, -ax, -ay);
   ctx.restore();
 }
@@ -79,6 +81,10 @@ export class World {
       invuln: 0,
       buffer: 0,
       dangerT: 0,
+      airT: 0,
+      highCue: false,
+      sqx: 1, // squash and stretch, eased back to 1
+      sqy: 1,
     };
 
     this.pickups = [];
@@ -192,6 +198,9 @@ export class World {
     const p = this.player;
     p.invuln = Math.max(0, p.invuln - dt);
     p.growT = Math.max(0, p.growT - dt);
+    const ease = Math.min(1, dt * 14);
+    p.sqx += (1 - p.sqx) * ease;
+    p.sqy += (1 - p.sqy) * ease;
     p.buffer = Math.max(0, p.buffer - dt);
     if (ctl.pressed) p.buffer = 0.12;
     if (this.moonReady) this.moonRise = Math.min(1, this.moonRise + dt / 1.2);
@@ -208,10 +217,19 @@ export class World {
       p.holding = ctl.held;
       p.airGot = 0;
       p.airCleared = 0;
-      this.emit('jump', {});
+      p.airT = 0;
+      p.highCue = false;
+      p.sqx = 0.8;
+      p.sqy = 1.25;
+      this.emit('jump', { ...this.pos(p.theta, R), theta: p.theta });
     }
 
     if (p.air) {
+      p.airT += dt;
+      if (p.holding && !p.highCue && p.airT > 0.16) {
+        p.highCue = true; // still holding: this is a high jump
+        this.emit('highJump', this.pos(p.theta, R + p.h));
+      }
       if (p.holding && !ctl.held) {
         p.holding = false;
         if (p.vy > 0) p.vy *= PLAYER.releaseCut;
@@ -233,10 +251,12 @@ export class World {
       return;
     }
     if (p.theta < -PLAYER.danger) {
+      // beeps speed up like a heartbeat the closer she gets to the edge
+      const depth = this.dangerDepth();
       p.dangerT += dt;
-      if (p.dangerT > 0.35) {
+      if (p.dangerT > 0.45 - 0.3 * depth) {
         p.dangerT = 0;
-        this.emit('danger', {});
+        this.emit('danger', { depth });
       }
     } else p.dangerT = 0;
 
@@ -254,20 +274,30 @@ export class World {
     this.collide();
   }
 
+  // 0 at the warning line, 1 at the edge.
+  dangerDepth() {
+    const d = (-this.player.theta - PLAYER.danger) / (PLAYER.edge - PLAYER.danger);
+    return Math.max(0, Math.min(1, d));
+  }
+
   land() {
     const p = this.player;
     p.air = false;
     p.h = 0;
     p.vy = 0;
     p.holding = false;
+    p.sqx = 1.3;
+    p.sqy = 0.75;
+    this.emit('touchdown', { ...this.pos(p.theta, R), theta: p.theta, high: p.highCue });
     if (p.airGot === 0 && p.airCleared === 0) {
       // An empty jump is a bad trade: lag spike.
       p.theta -= PLAYER.lagKnock;
       p.streak = 0;
       this.emit('lag', this.playerCenter());
     } else {
+      const before = this.mult;
       p.streak++;
-      this.emit('land', { streak: p.streak });
+      this.emit('land', { streak: p.streak, mult: this.mult, multUp: this.mult > before });
     }
   }
 
@@ -295,7 +325,7 @@ export class World {
           const value = COIN_VALUE * this.mult;
           this.coins++;
           this.levelScore += value;
-          this.emit('coin', { ...at, value, mult: this.mult });
+          this.emit('coin', { ...at, value, mult: this.mult, combo: p.air ? p.airGot - 1 : 0 });
         } else {
           this.items++;
           this.itemKinds.push(k.kind);
@@ -386,6 +416,7 @@ export class World {
         d.y = at.y;
         d.vx = -24;
         d.vy = -10;
+        this.emit('drop', at);
       }
     } else if (d.stage === 'void') {
       this.spinMult = Math.max(1, this.spinMult - dt * 2);
@@ -502,7 +533,8 @@ export class World {
     if (this.phase === 'dying' || this.phase === 'gone') return this.drawDying(ctx);
     if (p.invuln > 0 && Math.floor(t * 16) % 2) return;
     const frame = opts.frame ?? this.girlFrame();
-    const scale = this.displayScale();
+    const ds = this.displayScale();
+    const scale = [ds * p.sqx, ds * p.sqy];
     const rot = Math.round(p.theta / ROT_STEP) * ROT_STEP;
     const at = this.pos(p.theta, R + p.h);
     if (opts.ghost) {

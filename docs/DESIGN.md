@@ -97,6 +97,28 @@ the two posters are calm and static.
 6. **Write your nickname.** Static poster with a real text field (so phone keyboards work)
    and the top 10. Once named, later level-ups skip the typing and just show your rank.
 
+## Feel: feedback for every moment
+
+| Moment | Sound | Visual | Phone buzz* |
+| --- | --- | --- | --- |
+| Jump | hop blip; a second whoosh once you're holding for a high jump | dust puff, stretch, sparkles on high jumps | |
+| Land | soft thud | dust, squash | |
+| Coin | blip that climbs with the multiplier and again with every coin in one jump | "+10", sparkle, coin flies into the score, which flashes | |
+| Streak up | two-note ding | "x3" pop; "MAX x5!" in rainbow with confetti at x5 | short |
+| Self-care | arpeggio | hit-stop, grow flicker, shockwave rings, meter pip pops | short |
+| Lag (empty jump) | glitch noise, and the song itself stumbles | tear, RGB ghost on her, shake, "LAG!" | short |
+| Red candle hit | crunch, song stumbles | hit-stop, glitch, ghost, shake, "DUMP!" | medium |
+| Candle dodged | swish | "DODGED", sparkles | |
+| Slipping | heartbeat beeps that speed up; the song goes muffled | red pulsing edge, "SLIPPING!", flicker | |
+| Moon ready | chime | moon rises with a halo and twinkles, "JUMP TO THE MOON!" | short |
+| Leap / land on moon | rising sweep, fanfare | sparkle trail, dust, ring, shake | double |
+| Banking | ticks while counting, "ka-ching" at the end | count-up, number flash, coin burst | |
+| Roundtrip | crash, tape-stop, a falling whistle into the void, sad jingle on the card | heavy glitch, fall, carried, dissolve into static | long |
+| Leaderboard rank | jingle (#1 gets a fanfare) | confetti, ring for the top 3 | |
+| Level start / screen change | ready jingle | banner drops in; pixel dither dissolve between screens | |
+
+\* Android only (iPhones have no vibration API). Haptics follow the mute switch.
+
 ## Character and look
 
 As pitched: her blonde hair full of colourful clips, big brown eye, pointy ear with a
