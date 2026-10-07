@@ -2,8 +2,3 @@ node_modules/
 server/.env
 .DS_Store
 *.log
-
-# The song is added on the server, not committed (see public/audio/README.md).
-public/audio/*.mp3
-public/audio/*.ogg
-public/audio/*.m4a

@@ -63,7 +63,7 @@ MongoDB. Step by step, including systemd, certbot and backups:
 ```
 public/                 the game (vanilla JS modules, no build step)
   index.html, style.css, manifest.webmanifest, icon-*.png, og.png
-  audio/                drop roundtrip.mp3 here (git-ignored)
+  audio/roundtrip.mp3   the song (loops; tape-stops on a roundtrip)
   js/
     main.js             boot, fixed-step loop, mute button, ?scene= debug
     rules.js            scoring + level rules, shared with the server

@@ -43,11 +43,8 @@ sudo -u roundtrip npm ci --omit=dev
 
 ## 3. The song
 
-```bash
-scp roundtrip.mp3 you@vm:/tmp/ && ssh you@vm 'sudo install -o roundtrip -m 644 /tmp/roundtrip.mp3 /opt/roundtrip/public/audio/'
-```
-
-The game runs without it (no music, sound effects still play).
+Nothing to do: "roundtrip (Remastered)" ships in the repo at `public/audio/roundtrip.mp3`.
+To swap it later, see `public/audio/README.md`.
 
 ## 4. Configure
 

@@ -144,9 +144,9 @@ score per nickname.
   pushes you back, and enough of it (plus greedy jumping and red candles) slides you off.
   Never random.
 - **Timeline and cost?** v1 is built: playable on phone and desktop, all six screens, endless
-  levels, score and leaderboard, and a deploy kit for your own VM. What's left is
-  content, not code: the song file, a final pass on the sprite against the concept art,
-  and the subdomain.
+  levels, score and leaderboard, the song, and a deploy kit for your own VM. What's
+  left is content, not code: a final pass on the sprite against the concept art, and
+  the subdomain.
 
 ## Tuning table
 

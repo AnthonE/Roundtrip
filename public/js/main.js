@@ -4,7 +4,7 @@ import { initGlobe } from './globe.js';
 import { bakeSprites, S } from './sprites.js';
 import { bakeBackground } from './background.js';
 import { initInput, drainInput, onGesture } from './input.js';
-import { toggleMute, isMuted, unlockAudio } from './audio.js';
+import { toggleMute, isMuted, unlockAudio, musicElement } from './audio.js';
 import { shakeOffset } from './fx.js';
 import { PLAYER } from './config.js';
 import { director } from './director.js';
@@ -139,4 +139,4 @@ function debugGrant(w, n) {
   }
 }
 
-window.__rt = { director, play, debugGrant, view, PLAYER };
+window.__rt = { director, play, debugGrant, view, PLAYER, musicElement };

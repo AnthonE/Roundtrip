@@ -18,6 +18,7 @@ try {
 } catch {}
 
 export const isMuted = () => muted;
+export const musicElement = () => music; // for tests and debugging
 
 function ensureContext() {
   if (actx) return actx;
