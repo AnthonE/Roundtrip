@@ -106,6 +106,18 @@ It fast-forwards to `origin/main`, reinstalls server deps, restarts the API and 
 health check. Static files take effect immediately (nginx revalidates JS/CSS on every load).
 Set `BRANCH=...` to deploy another branch.
 
+`update.sh` doesn't touch nginx. When `deploy/nginx/roundtrip.conf` changes, copy the changed
+lines into `/etc/nginx/sites-available/roundtrip.conf` by hand (certbot edited that file, so
+don't overwrite it), then `sudo nginx -t && sudo systemctl reload nginx`.
+
+## Playing in the X (Twitter) timeline
+
+`index.html` declares a player card, so X frames the game itself at 480×480. That relies on
+two lines in the nginx config: `frame-ancestors` allowing twitter.com and x.com, and the
+`sub_filter` that turns `%ORIGIN%` into absolute URLs. Check with
+`curl -s https://YOUR.SUBDOMAIN/ | grep twitter:player`. X decides per domain whether to
+render player cards inline; where it doesn't, the post shows the image with a link.
+
 ## Day-2 notes
 
 **Logs**: `journalctl -u roundtrip-api`. Rejected level reports show up as 4xx in the nginx
