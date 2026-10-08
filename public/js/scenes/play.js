@@ -2,7 +2,7 @@
 import { view } from '../render.js';
 import { drawText, textWidth, formatNumber } from '../font.js';
 import { COLORS, FX, PLAYER } from '../config.js';
-import { ITEMS_PER_LEVEL, LEVEL_BONUS, spinFor } from '../rules.js';
+import { ITEMS_PER_LEVEL, LEVEL_TIME, spinFor, levelMult } from '../rules.js';
 import { World, moonPos } from '../game.js';
 import { S, ITEM_LABEL, ITEM_COLOR } from '../sprites.js';
 import { drawBackground } from '../background.js';
@@ -31,7 +31,7 @@ export const play = {
     this.ghostT = 0;
     this.maxShown = false;
     // HUD "punch" timers: a number flashes white and hops when it changes
-    this.punch = { unreal: 0, mult: 0, banked: 0, pips: [0, 0, 0, 0, 0] };
+    this.punch = { unreal: 0, mult: 0, banked: 0, clock: 0, pips: [0, 0, 0, 0, 0] };
     clearFx();
     sfx.ready();
     this.world = new World({ level, seed, onEvent: (type, d) => this.onWorld(type, d) });
@@ -130,6 +130,15 @@ export const play = {
         popText(d.x, d.y, 'DODGED', COLORS.cyan, { life: 0.5 });
         for (let i = 0; i < 3; i++) sparkleTrail(d.x + (i - 1) * 4, d.y + 4, COLORS.cyan);
         break;
+      case 'tick':
+        sfx.tick(d.secs <= 3);
+        P.clock = 0.2;
+        if (d.secs <= 3) haptic(10);
+        break;
+      case 'timeout':
+        sfx.timeout();
+        popText(view.W / 2, Math.round(view.H * 0.24), "TIME'S UP!", COLORS.red, { life: 1.4 });
+        break;
       case 'danger':
         sfx.danger(d.depth);
         this.glitch(0.12, 0.1);
@@ -176,7 +185,17 @@ export const play = {
     const w = this.world;
     const run = this.run;
     const add = w.bankValue();
-    this.bank = { t: 0, from: run.banked, add, unreal: w.levelScore, bonus: LEVEL_BONUS * this.level, ticked: 0 };
+    this.bank = {
+      t: 0,
+      from: run.banked,
+      add,
+      unreal: w.levelScore,
+      secs: Math.floor(w.timeLeft),
+      time: w.timeBonus(),
+      bonus: w.levelBonus(),
+      mult: w.levelMult,
+      ticked: 0,
+    };
     const stats = {
       level: this.level,
       coins: w.coins,
@@ -223,7 +242,7 @@ export const play = {
         director.go('nickname', { mode: 'board' });
       }, { w: 112 }),
     );
-    this.card = { t: 0, lost: this.world.levelScore, buttons, shareY: 0 };
+    this.card = { t: 0, lost: this.world.levelScore, timedOut: this.world.timedOut, buttons, shareY: 0 };
   },
 
   // ---- input --------------------------------------------------------------
@@ -290,6 +309,7 @@ export const play = {
     P.unreal = Math.max(0, P.unreal - dt);
     P.mult = Math.max(0, P.mult - dt);
     P.banked = Math.max(0, P.banked - dt);
+    P.clock = Math.max(0, P.clock - dt);
     P.pips = P.pips.map((v) => Math.max(0, v - dt));
     if (this.paused) return;
     this.glitchT = Math.max(0, this.glitchT - dt);
@@ -390,6 +410,13 @@ export const play = {
     }
     drawText(ctx, `LV ${this.level}`, W - 4, 16, { align: 'right', color: COLORS.lavender, shadow: INK });
 
+    // the clock: white, yellow from 20 s, red and thumping over the last 10
+    const secs = Math.ceil(w.timeLeft);
+    const clockColor = P.clock > 0 ? '#ffffff' : secs <= 10 ? COLORS.red : secs <= 20 ? COLORS.yellow : '#ffffff';
+    if (!w.moonReady || secs > 10 || blink(t, 3)) {
+      drawText(ctx, String(secs), W / 2, P.clock > 0 ? 23 : 24, { align: 'center', color: clockColor, outline: INK, scale: 2 });
+    }
+
     // level intro
     if (!this.paused && this.t < 2.6 && (this.t > 2.0 ? blink(this.t, 5) : true)) {
       const slide = Math.max(0, 1 - this.t / 0.25);
@@ -397,10 +424,10 @@ export const play = {
       drawText(ctx, `LEVEL ${this.level}`, W / 2, y, { align: 'center', color: COLORS.yellow, outline: INK, scale: 2 });
       const lines =
         this.level === 1
-          ? ['TAP: HOP   HOLD: HIGH JUMP', "DON'T SLIDE BACK"]
+          ? ['TAP: HOP   HOLD: HIGH JUMP', "DON'T SLIDE BACK", `MOON IN ${LEVEL_TIME} SEC OR ROUNDTRIP`]
           : this.level === 2
-            ? ['THE WORLD SPINS FASTER', 'HOP THE RED CANDLES']
-            : [`SPIN x${(spinFor(this.level) / spinFor(1)).toFixed(2)}`];
+            ? ['THE WORLD SPINS FASTER', 'HOP THE RED CANDLES', `EVERYTHING PAYS x${levelMult(2)}`]
+            : [`SPIN x${(spinFor(this.level) / spinFor(1)).toFixed(2)}`, `EVERYTHING PAYS x${levelMult(this.level)}`];
       lines.forEach((l, i) => drawText(ctx, l, W / 2, y + 20 + i * 10, { align: 'center', color: '#ffffff', outline: INK }));
     }
 
@@ -416,20 +443,29 @@ export const play = {
     const pw = Math.min(W - 16, 200);
     const x = Math.round(W / 2 - pw / 2);
     const y = Math.round(H * 0.2);
-    drawPanel(ctx, x, y, pw, 84);
+    drawPanel(ctx, x, y, pw, 104);
     const cx = W / 2;
     drawText(ctx, 'LEVEL COMPLETE', cx, y + 8, { align: 'center', color: COLORS.yellow, scale: 1 });
     drawText(ctx, 'YOU TOOK PROFIT', cx, y + 19, { align: 'center', color: COLORS.neonGreen });
-    drawText(ctx, `UNREALIZED  +${formatNumber(b.unreal)}`, cx, y + 33, { align: 'center', color: '#ffffff' });
-    drawText(ctx, `LEVEL BONUS +${formatNumber(b.bonus)}`, cx, y + 43, { align: 'center', color: '#ffffff' });
+    // label left, amount right, so the column of numbers adds up at a glance
+    const lx = x + 10;
+    const rx = x + pw - 10;
+    const row = (label, value, ry, color = '#ffffff') => {
+      drawText(ctx, label, lx, ry, { color });
+      drawText(ctx, value, rx, ry, { align: 'right', color });
+    };
+    row('UNREALIZED', `+${formatNumber(b.unreal)}`, y + 33);
+    row(`TIME LEFT ${b.secs} SEC`, `+${formatNumber(b.time)}`, y + 43);
+    row('LEVEL BONUS', `+${formatNumber(b.bonus)}`, y + 53);
+    if (b.mult > 1) drawText(ctx, `LEVEL ${this.level} PAYS x${b.mult}`, cx, y + 63, { align: 'center', color: COLORS.lavender });
     const k = Math.min(1, Math.max(0, (b.t - 0.5) / 1.1));
     const done = this.punch.banked > 0;
-    drawText(ctx, `BANKED ${formatNumber(b.from + b.add * k)}`, cx, y + 57 - (done ? 1 : 0), {
+    drawText(ctx, `BANKED ${formatNumber(b.from + b.add * k)}`, cx, y + 77 - (done ? 1 : 0), {
       align: 'center',
       color: done ? '#ffffff' : COLORS.pink,
       scale: 1,
     });
-    if (b.t > 1.2 && blink(t)) drawText(ctx, 'TAP TO CONTINUE', cx, y + 71, { align: 'center', color: COLORS.lavender });
+    if (b.t > 1.2 && blink(t)) drawText(ctx, 'TAP TO CONTINUE', cx, y + 91, { align: 'center', color: COLORS.lavender });
   },
 
   drawCard(ctx, t, dt) {
@@ -447,7 +483,9 @@ export const play = {
     drawText(ctx, 'ROUNDTRIP', cx - 1 + j, y + 8, { align: 'center', color: COLORS.neonGreen, scale: 3 });
     drawText(ctx, 'ROUNDTRIP', cx + 1 - j, y + 8, { align: 'center', color: COLORS.neonPurple, scale: 3 });
     drawText(ctx, 'ROUNDTRIP', cx, y + 8, { align: 'center', color: '#ffffff', scale: 3 });
-    drawText(ctx, c.lost > 0 ? `YOU GAVE BACK +${formatNumber(c.lost)}` : 'NOTHING UNREALIZED. LUCKY.', cx, y + 36, {
+    const lostLine = c.lost > 0 ? `GAVE BACK +${formatNumber(c.lost)}` : 'NOTHING UNREALIZED.';
+    const line = c.timedOut ? `TIME'S UP. ${lostLine}` : c.lost > 0 ? `YOU ${lostLine}` : 'NOTHING UNREALIZED. LUCKY.';
+    drawText(ctx, line, cx, y + 36, {
       align: 'center',
       color: COLORS.neonGreen,
     });

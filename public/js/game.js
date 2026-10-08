@@ -10,12 +10,15 @@ import {
   MAX_MULT,
   ITEM_VALUE,
   LEVEL_BONUS,
+  LEVEL_TIME,
   BASE_SPIN,
   ITEM_FIRST_DELAY,
   ITEM_INTERVAL_MIN,
   ITEM_INTERVAL_MAX,
   PATTERN_GAP_MIN,
   spinFor,
+  levelMult,
+  timeBonus,
 } from './rules.js';
 import { S, ITEM_KINDS, GIRL_ANCHOR } from './sprites.js';
 import { drawGlobe } from './globe.js';
@@ -55,6 +58,7 @@ export function moonPos() {
 export class World {
   constructor({ level = 1, seed = (Math.random() * 2 ** 32) >>> 0, onEvent = () => {} } = {}) {
     this.level = level;
+    this.levelMult = levelMult(level);
     this.spin = spinFor(level);
     this.pace = Math.sqrt(this.spin / BASE_SPIN);
     this.rand = makeRng(seed);
@@ -93,6 +97,7 @@ export class World {
     this.itemKinds = [];
     this.coins = 0;
     this.levelScore = 0;
+    this.timeLeft = LEVEL_TIME; // stops when she leaps; at 0 the market closes on her
     this.itemTimer = ITEM_FIRST_DELAY;
     this.moonReady = false;
     this.moonRise = 0;
@@ -110,8 +115,16 @@ export class World {
     return this.levelScore;
   }
 
+  timeBonus() {
+    return timeBonus(this.level, this.timeLeft);
+  }
+
+  levelBonus() {
+    return LEVEL_BONUS * this.levelMult;
+  }
+
   bankValue() {
-    return this.levelScore + LEVEL_BONUS * this.level;
+    return this.levelScore + this.timeBonus() + this.levelBonus();
   }
 
   // ---- positions ----------------------------------------------------------
@@ -194,6 +207,16 @@ export class World {
     this.G += this.spin * this.spinMult * dt;
     if (this.phase === 'dying' || this.phase === 'gone') return this.updateDying(dt);
     if (this.phase === 'leap' || this.phase === 'landed') return this.updateLeap(dt);
+
+    // the clock: ticks over the last ten seconds, a roundtrip at zero
+    const secs = Math.ceil(this.timeLeft);
+    this.timeLeft = Math.max(0, this.timeLeft - dt);
+    if (this.timeLeft <= 0) {
+      this.emit('timeout', this.playerCenter());
+      this.startDying();
+      return;
+    }
+    if (Math.ceil(this.timeLeft) < secs && secs <= 10) this.emit('tick', { secs: secs - 1 });
 
     const p = this.player;
     p.invuln = Math.max(0, p.invuln - dt);
@@ -322,14 +345,14 @@ export class World {
         const at = this.pos(a, R + k.h);
         if (p.air) p.airGot++;
         if (k.type === 'coin') {
-          const value = COIN_VALUE * this.mult;
+          const value = COIN_VALUE * this.mult * this.levelMult;
           this.coins++;
           this.levelScore += value;
           this.emit('coin', { ...at, value, mult: this.mult, combo: p.air ? p.airGot - 1 : 0 });
         } else {
           this.items++;
           this.itemKinds.push(k.kind);
-          this.levelScore += ITEM_VALUE;
+          this.levelScore += ITEM_VALUE * this.levelMult;
           p.fromScale = p.scale;
           p.scale = 1 + PLAYER.growStep * this.items;
           p.growT = FX.growTime;
@@ -373,6 +396,7 @@ export class World {
   startDying() {
     const p = this.player;
     this.phase = 'dying';
+    this.timedOut = this.timeLeft <= 0;
     this.dying = { t: 0, stage: 'glitch', rot: 0, attach: null, x: 0, y: 0, vx: 0, vy: 0, h0: p.h };
     this.emit('roundtrip', this.playerCenter());
   }

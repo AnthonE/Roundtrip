@@ -305,6 +305,13 @@ export const sfx = {
     noise(0.09, { vol: 0.08, freq: 4200, q: 1.2 });
     tone(880, 0.06, { type: 'triangle', vol: 0.05, slide: 1320, delay: 0.03 });
   },
+  // the level clock over its last ten seconds; the last three are higher
+  tick(urgent = false) {
+    tone(urgent ? 1760 : 1320, 0.05, { type: 'square', vol: urgent ? 0.06 : 0.04 });
+  },
+  timeout() {
+    seq([880, 0, 880, 0, 659], 0.09, { type: 'square', vol: 0.07, dur: 0.1 });
+  },
   danger(depth = 0) {
     tone(700 + depth * 400, 0.05, { type: 'square', vol: 0.04 });
   },
