@@ -110,6 +110,8 @@ the two posters are calm and static.
 | Red candle hit | crunch, song stumbles | hit-stop, glitch, ghost, shake, "DUMP!" | medium |
 | Candle dodged | swish | "DODGED", sparkles | |
 | Slipping | heartbeat beeps that speed up; the song goes muffled | red pulsing edge, "SLIPPING!", flicker | |
+| Clock, last 10 s | tick each second, higher for the last three | number turns red and thumps | tiny, last three |
+| Time's up | three-note alarm, then the roundtrip | "TIME'S UP!", card says "TIME'S UP. GAVE BACK +…" | |
 | Moon ready | chime | moon rises with a halo and twinkles, "JUMP TO THE MOON!" | short |
 | Leap / land on moon | rising sweep, fanfare | sparkle trail, dust, ring, shake | double |
 | Banking | ticks while counting, "ka-ching" at the end | count-up, number flash, coin burst | |
@@ -136,11 +138,20 @@ has the album art's starry navy, faint grid, pixel butterfly nebula and pastel r
 
 | | Points |
 | --- | --- |
-| Coin | 10 × multiplier (x1–x5) |
-| Self-care item | 50 |
+| Coin | 10 × streak (x1–x5) × level |
+| Self-care item | 50 × level |
+| Time bonus (on banking) | 20 × whole seconds left × level |
 | Level bonus (on banking) | 100 × level |
 
 Unrealized = coins + items this level. Banked = everything you've taken to the moon.
+
+**The clock and the level multiplier.** Each level has 60 seconds. The clock stops when
+she leaps; if it hits zero first, the market closes on her and she roundtrips ("TIME'S
+UP"). It goes yellow at 20 s and red, with ticks, over the last 10. Without it you could
+dodge the self-care items and sit on easy level 1 at x5 forever, farming coins. Now a level
+is capped at 60 seconds of coins, finishing fast pays, and everything in level N pays N×,
+so pushing on always beats replaying easy levels. The tuning lives in `rules.js`
+(`LEVEL_TIME`, `TIME_VALUE`, `levelMult`).
 
 ## Leaderboard and fair play
 
@@ -150,8 +161,10 @@ The server can't watch you play, so it checks that each banked level was *possib
 - All five items are reported.
 - At least 90% of the fastest possible level time has passed on the server's clock since
   the previous level. Items spawn on a timer, so a level can't be faster than about 26 s.
-- Coins don't exceed what the spawner could have produced in that time, and the score
-  doesn't exceed coins × 10 × 5 + items × 50 + level bonus.
+- Coins don't exceed what the spawner could have produced in that time, capped at the
+  60-second level clock (so a slow return from the menus can't hide a farmed level), and
+  the score doesn't exceed (coins × 10 × 5 + items × 50 + 100) × level plus the largest
+  possible time bonus.
 - Rate limits per IP (in Node, and again in nginx). JSON-only bodies with an origin check,
   so other sites can't post scores.
 

@@ -26,7 +26,10 @@ make her big enough to leap to the moon.
 - Red candles (from level 2) knock you back. Hop them.
 - Slide too far down the globe's shoulder and you **ROUNDTRIP**. Unbanked coins are gone.
 - Five self-care items make her big enough. Then jump to the moon to bank everything.
-- Each level spins about 15% faster. Your banked total goes on the leaderboard.
+- Each level has a 60-second clock. Run out before the moon and you roundtrip. Seconds
+  left when you bank pay a time bonus.
+- Each level spins about 15% faster, and everything in it pays more: level 3 pays x3.
+  Your banked total goes on the leaderboard.
 
 Design notes, every decision, and the full tuning table are in [docs/DESIGN.md](docs/DESIGN.md).
 

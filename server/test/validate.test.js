@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { normalizeNick, checkLevel, clampLimit, MIN_LEVEL_MS } from '../lib/validate.js';
-import { ITEMS_PER_LEVEL, maxCoinsFor, maxLevelScore } from '../../public/js/rules.js';
+import { ITEMS_PER_LEVEL, LEVEL_TIME, maxCoinsFor, maxLevelScore, levelMult } from '../../public/js/rules.js';
 
 test('nicknames are trimmed, length-checked and keyed case-insensitively', () => {
   assert.deepEqual(normalizeNick('  Brooklyn  '), { ok: true, nick: 'Brooklyn', key: 'brooklyn' });
@@ -49,6 +49,19 @@ test('coin and score caps hold', () => {
   const maxScore = maxLevelScore(1, 20, ITEMS_PER_LEVEL);
   assert.equal(checkLevel(run(), good({ score: maxScore + 1 }), secs * 1000).error, 'score too high');
   assert.equal(checkLevel(run(), good({ score: maxScore }), secs * 1000).ok, true);
+});
+
+test('waiting around never raises the coin cap past the level clock', () => {
+  const capAtClock = maxCoinsFor(1, LEVEL_TIME);
+  assert.equal(maxCoinsFor(1, LEVEL_TIME * 10), capAtClock);
+  // a slow return from the menus doesn't let a farmed level through
+  assert.equal(checkLevel(run(), good({ coins: capAtClock + 1 }), 600_000).error, 'too many coins');
+});
+
+test('later levels pay more for the same play', () => {
+  assert.equal(levelMult(1), 1);
+  assert.ok(levelMult(4) > levelMult(3));
+  assert.ok(maxLevelScore(3, 20, ITEMS_PER_LEVEL) > maxLevelScore(1, 20, ITEMS_PER_LEVEL) * 2);
 });
 
 test('incomplete or malformed reports are rejected', () => {
