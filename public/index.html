@@ -8,9 +8,18 @@
     <meta name="theme-color" content="#18205a" />
     <meta property="og:title" content="ROUNDTRIP" />
     <meta property="og:description" content="Run the globe, grab the coins, don't roundtrip. Self-care gets you to the moon." />
-    <meta property="og:image" content="og.png" />
+    <!-- nginx fills in %ORIGIN% (sub_filter): card crawlers need absolute URLs. -->
+    <meta property="og:image" content="%ORIGIN%/og.png" />
+    <meta property="og:url" content="%ORIGIN%/" />
     <meta property="og:type" content="website" />
-    <meta name="twitter:card" content="summary_large_image" />
+    <!-- Player card: X frames this same page in the timeline (nginx's frame-ancestors allows it). -->
+    <meta name="twitter:card" content="player" />
+    <meta name="twitter:title" content="ROUNDTRIP" />
+    <meta name="twitter:description" content="Run the globe, grab the coins, don't roundtrip. Self-care gets you to the moon." />
+    <meta name="twitter:image" content="%ORIGIN%/og.png" />
+    <meta name="twitter:player" content="%ORIGIN%/" />
+    <meta name="twitter:player:width" content="480" />
+    <meta name="twitter:player:height" content="480" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
