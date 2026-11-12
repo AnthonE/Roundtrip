@@ -70,6 +70,7 @@ body{margin:0;background:var(--paper);color:var(--ink);font-family:var(--body);f
       <div class="row">
         <button class="btn" id="compare" type="button" aria-pressed="false">Compare</button>
         <button class="btn" id="pause" type="button" aria-pressed="false">Pause</button>
+        <button class="btn" id="turn" type="button">Front view</button>
         <button class="btn" id="more" type="button" aria-expanded="false" aria-controls="sliders">Dials</button>
       </div>
       <div class="sliders" id="sliders">
@@ -135,7 +136,7 @@ uniform vec3 uCam, uSun, uHaze, uGirl;
 uniform float uPxAngle;                  // world units covered by one reference pixel at distance 1
 uniform float uPxScale;                  // device pixels per reference pixel (the look is authored at 720p)
 uniform float uCellPx, uCellAmt, uSplitX, uFog;
-uniform vec4 uMA[13], uMB[13], uMC[13], uMD[13];   // per-material look, see defMat() below
+uniform vec4 uMA[14], uMB[14], uMC[14], uMD[14];   // per-material look, see defMat() below
 uniform vec3 uPathCol, uGrassCol;
 
 // ---- integer hash: identical on every GPU, no sin() banding
@@ -256,7 +257,7 @@ void main(){
     if(w > 0.0) col = mix(col, paintCell(b, vCol, mat, ndl, aa, amt), w);
   }
   if(mat == 0){                                      // soft blob of shade under the skater
-    float sh = 1.0 - smoothstep(0.1, 0.62, length(vWorld.xz - uGirl.xz));
+    float sh = 1.0 - smoothstep(0.12, 0.74, length(vWorld.xz - uGirl.xz));
     col *= mix(vec3(1.0), vec3(0.85,0.79,0.84), sh*0.85);
   }
   col = mix(col, uHaze, fog*0.9);                    // far things fade toward the paper
@@ -435,8 +436,8 @@ const rnd = rng(11);
 const R = (a,b) => a + (b-a)*rnd();
 
 /* ---------- materials: how each kind of surface is tiled ---------- */
-const MAT = {GROUND:0, FOLIAGE:1, BARK:2, STONE:3, WALL:4, ROOF:5, COAT:6, HAIR:7, SKIN:8, DENIM:9, BOOT:10, FLAT:11, HILL:12};
-const NM = 13;
+const MAT = {GROUND:0, FOLIAGE:1, BARK:2, STONE:3, WALL:4, ROOF:5, COAT:6, HAIR:7, SKIN:8, DENIM:9, BOOT:10, FLAT:11, HILL:12, TOP:13};
+const NM = 14;
 const mA = new Float32Array(NM*4), mB = new Float32Array(NM*4), mC = new Float32Array(NM*4), mD = new Float32Array(NM*4);
 // alt      second cell colour            altAmt  share of cells that take it
 // scale    cell size multiplier          stretch <1 makes tall thin cells      jitter 1 = organic, 0 = grid
@@ -454,12 +455,13 @@ defMat(MAT.BARK,    {alt:'#e6bd84', altAmt:.30, scale:1.2, stretch:.45, jitter:.
 defMat(MAT.STONE,   {alt:'#fadfc4', altAmt:.30, scale:2.3, jitter:.55, valJit:.05, line:[.86,.78,.72], lineAmt:.5, pillow:.04, shade:.85});
 defMat(MAT.WALL,    {alt:'#fff1dc', altAmt:.25, scale:1.7, jitter:.5, valJit:.04, line:[.86,.8,.78], lineAmt:.36, pillow:.03, shade:.8});
 defMat(MAT.ROOF,    {alt:'#c3d2ea', altAmt:.20, scale:1.2, stretch:.5, jitter:.6, valJit:.07, line:[.8,.8,.82], lineAmt:.45, pillow:.05, shade:.9});
-defMat(MAT.COAT,    {alt:'#d3c0ee', altAmt:.10, scale:1.9, stretch:.72, jitter:.18, valJit:.015, line:[.78,.69,.93], abs:1, lineAmt:.5, pillow:0, shade:.6});
-defMat(MAT.HAIR,    {alt:'#ffdb93', altAmt:.30, scale:1.05, stretch:.13, jitter:.9, valJit:.04, line:[.95,.82,.62], lineAmt:.5, pillow:0, shade:.6});
+defMat(MAT.COAT,    {alt:'#fbd3da', altAmt:.22, scale:1.9, stretch:.72, jitter:.2, valJit:.012, line:[.93,.80,.88], abs:1, lineAmt:.3, pillow:0, shade:.55});
+defMat(MAT.HAIR,    {alt:'#fddc9c', altAmt:.30, scale:1.0, stretch:.12, jitter:.9, valJit:.035, line:[.94,.80,.60], lineAmt:.5, pillow:0, shade:.55});
 defMat(MAT.SKIN,    {shade:.5});
-defMat(MAT.DENIM,   {alt:'#d6def2', altAmt:.30, scale:1.5, stretch:.6, jitter:.35, valJit:.03, line:[.86,.88,.95], lineAmt:.4, shade:.7});
+defMat(MAT.DENIM,   {alt:'#cdd8ee', altAmt:.30, scale:1.3, stretch:.2, jitter:.3, valJit:.025, line:[.88,.91,.98], lineAmt:.5, shade:.65});
 defMat(MAT.BOOT,    {scale:2, valJit:.02, line:[.9,.84,.76], lineAmt:.25, shade:.6});
 defMat(MAT.FLAT,    {shade:.55});
+defMat(MAT.TOP,     {alt:'#dccdf3', altAmt:.3, scale:.75, stretch:.1, jitter:.25, valJit:.02, line:[.86,.80,.95], lineAmt:.55, shade:.6});
 defMat(MAT.HILL,    {alt:'#c4d8d2', altAmt:.45, scale:1.25, valJit:.07, line:[.84,.87,.82], lineAmt:.5, pillow:.08, shade:.8});
 
 /* =====================================================================================
@@ -738,47 +740,226 @@ function buildBackdrop(B){
   }
 }
 
-/* ---------- the skater ---------- */
-const HIP = [0.085, 0.53, 0], NECK = [0, 0.88, 0], SHOULDER = [0.16, 0.815, 0], TORSO = [0, 0.5, 0];
+/* ---------- surfaces built from a formula: used for her hair, coat, sleeves and every detail laid on them ---------- */
+function grid(nu, nv, f, ref){                          // f(u,v) -> point; normals face away from ref(point)
+  const p = [], n = [], i = [], W = nu+1, P = [];
+  for(let b=0;b<=nv;b++) for(let a=0;a<=nu;a++){ const q = f(a/nu, b/nv); P.push(q); p.push(q[0],q[1],q[2]); }
+  for(let b=0;b<=nv;b++) for(let a=0;a<=nu;a++){
+    const q = P[b*W+a], o = sub(q, ref(q));
+    let m = cross(sub(P[b*W+Math.min(nu,a+1)], P[b*W+Math.max(0,a-1)]), sub(P[Math.min(nv,b+1)*W+a], P[Math.max(0,b-1)*W+a]));
+    const l = Math.hypot(m[0],m[1],m[2]);
+    if(l < 1e-10) m = norm(o); else { m = [m[0]/l, m[1]/l, m[2]/l]; if(dot(m,o) < 0) m = [-m[0],-m[1],-m[2]]; }
+    n.push(m[0],m[1],m[2]);
+  }
+  for(let b=0;b<nv;b++) for(let a=0;a<nu;a++){ const k = b*W+a; i.push(k,k+W,k+1, k+1,k+W,k+W+1); }
+  return {p,n,i};
+}
+function patch(Pf, map, off, ref, nu, nv){               // a piece of surface Pf, lifted `off` above it (a decal)
+  return grid(nu, nv, (u,v) => {
+    const [a,b] = map(u,v), e = 1e-3, q = Pf(a,b);
+    let m = norm(cross(sub(Pf(a+e,b), Pf(a-e,b)), sub(Pf(a,b+e), Pf(a,b-e))));
+    if(dot(m, sub(q, ref(q))) < 0) m = [-m[0],-m[1],-m[2]];
+    return [q[0]+m[0]*off, q[1]+m[1]*off, q[2]+m[2]*off];
+  }, ref);
+}
+const decal = (Pf, a0, a1, b0, b1, off, ref, nu = 3, nv = 3) => patch(Pf, (u,v) => [a0+(a1-a0)*u, b0+(b1-b0)*v], off, ref, nu, nv);
+function prism(pts, depth){                              // flat outline with thickness, facing +Z (star, bow, clip)
+  const p = [], n = [], i = [], h = depth/2, N = pts.length;
+  let cx = 0, cy = 0; for(const q of pts){ cx += q[0]/N; cy += q[1]/N; }
+  for(const [z, nz] of [[h,1],[-h,-1]]){ const b = p.length/3; p.push(cx,cy,z); n.push(0,0,nz);
+    for(const q of pts){ p.push(q[0],q[1],z); n.push(0,0,nz); }
+    for(let k=0;k<N;k++) i.push(b, b+1+k, b+1+(k+1)%N); }
+  for(let k=0;k<N;k++){ const a = pts[k], c = pts[(k+1)%N], b = p.length/3, ex = c[0]-a[0], ey = c[1]-a[1], l = Math.hypot(ex,ey) || 1;
+    let nx = ey/l, ny = -ex/l; if(nx*(a[0]-cx)+ny*(a[1]-cy) < 0){ nx = -nx; ny = -ny; }
+    p.push(a[0],a[1],h, c[0],c[1],h, c[0],c[1],-h, a[0],a[1],-h); for(let q=0;q<4;q++) n.push(nx,ny,0); i.push(b,b+1,b+2, b,b+2,b+3); }
+  return {p,n,i};
+}
+
+/* ---------- the skater, modelled from her character sheet. She faces -Z; +X is her right. ---------- */
+const HIP = [0.058, 0.66, 0], NECK = [0, 1.0, 0], SHOULDER = [0.118, 0.972, 0], TORSO = [0, 0.62, 0];
 function buildGirl(B){
-  const pink = hex('#f7c4ce'), pinkD = hex('#efb1bf'), blond = hex('#fdd07f'), blondD = hex('#f6c06a'), skin = hex('#fbdcc6'),
-        denim = hex('#bfcbe6'), cream = hex('#fff3e0'), sole = hex('#dcb689'), wheel = hex('#8fc3dc'), INK = 1;
-  // coat
-  B.add(lathe([[.305,.335],[.283,.42],[.245,.55],[.203,.68],[.173,.78],[.156,.835],[.105,.875],[.06,.895]], 22),
-    Sc(1,1,.76), (x,y) => mixc(pinkD, pink, smooth(.33,.78,y)), MAT.COAT, nid(), 1, INK);
-  const pm = mm(T(.152,.455,.172), RY(.47));
-  B.add(BOX, mm(pm, Sc(.094,.10,.024)), pink, MAT.COAT, nid(), 1, INK);
-  B.add(BOX, mm(pm, T(0,.05,.004), Sc(.104,.036,.03)), pink, MAT.COAT, nid(), 1, INK);
-  // arms
-  for(const [sx, part] of [[-1,3],[1,4]]){
-    const id = nid(), sh = [sx*SHOULDER[0], SHOULDER[1], 0], cuff = [sx*.285, .485, 0];
-    limb(B, cuff, sh, .08, .056, (x,y) => mixc(pinkD, pink, smooth(.46,.76,y)), MAT.COAT, id, part, INK, 10, true);
-    B.add(SPH[1], mm(T(cuff[0]+sx*.01, cuff[1]-.028, 0), Sc(.04)), skin, MAT.SKIN, id, part, INK);
+  const C = {}; for(const [k,v] of Object.entries({
+    hair:'#f9c873', hairHi:'#fcd993', hairLo:'#f0b660', hairIn:'#e2a652', skin:'#fdeadb', ear:'#fbdccb', earIn:'#f2b9a8', blush:'#f8b1a6',
+    eyeD:'#3c281f', eyeM:'#ad6229', eyeL:'#f4bb66', mouth:'#b5625b', white:'#fffdf8',
+    top:'#cdb9ec', coat:'#f8c4cc', coatLo:'#f4b5c0', lining:'#eba3b4', lapel:'#fcdde2', seam:'#eaa0b1', lav:'#c7b4ec', lavHi:'#ded2f5', teal:'#97d4d9', cuff:'#d6cbec',
+    denim:'#bccbe6', denimHi:'#d6e0f2', belt:'#d9a886', buckle:'#8ab8e8', boot:'#fcf0df', lace:'#ead5b6', sole:'#cfa98a', plate:'#b6a696', wheel:'#86bfe0', hub:'#5f9cc6',
+    watch:'#5fb4c4', dial:'#f8ead0', bowTeal:'#5fc3cc', bowPink:'#f39dba', star:'#8fd3f5', brolly:'#e4633c', clip:'#f7b9c9', bunny:'#fcdbe2',
+    choker:'#63b8c6', gold:'#e3b266', pendant:'#f1a14b'})) C[k] = hex(v);
+  const INK = 1, TAU = Math.PI*2, DEG = Math.PI/180, ID = I4();
+  const axisRef = p => [0, p[1], 0];
+
+  /* ----- coat: an open A-line shell, plus everything stitched onto it ----- */
+  const prof = [[0.24,0.290],[0.40,0.256],[0.58,0.215],[0.76,0.177],[0.89,0.149],[0.955,0.129],[0.99,0.110],[1.014,0.070]];
+  const lin = y => { if(y <= prof[0][0]) return prof[0][1]; for(let k=1;k<prof.length;k++) if(y <= prof[k][0]){ const [y0,r0] = prof[k-1], [y1,r1] = prof[k]; return r0+(r1-r0)*(y-y0)/(y1-y0); } return prof[prof.length-1][1]; };
+  const coatR = y => (lin(y-0.014) + 2*lin(y) + lin(y+0.014))/4;
+  const coatP = (a, y, d = 0) => { const r = (coatR(y)+d)*(1 + 0.03*Math.sin(a*5+0.6)*smooth(0.62, 0.24, y)); return [r*Math.sin(a), y, -r*0.8*Math.cos(a)]; };
+  const G = 0.40, HEM = 0.24, TOPY = 1.014, idCoat = nid();          // G: half-angle of the open front
+  const coatCol = (x,y) => mixc(C.coatLo, C.coat, smooth(0.24, 0.75, y));
+  B.add(grid(92, 24, (u,v) => coatP(G+(TAU-2*G)*u, HEM+(TOPY-HEM)*v), axisRef), ID, coatCol, MAT.COAT, idCoat, 1, INK);
+  B.add(grid(92, 16, (u,v) => coatP(G+(TAU-2*G)*u, HEM+(TOPY-HEM)*v, -0.008), axisRef), ID, C.lining, MAT.COAT, nid(), 1, INK);
+  const sew = (a0, a1, y0, y1, col, o = {}) => B.add(decal(coatP, a0*DEG, a1*DEG, y0, y1, o.off ?? 0.004, axisRef, o.nu ?? Math.max(1, Math.round(Math.abs(a1-a0)/7)), o.nv ?? Math.max(1, Math.round(Math.abs(y1-y0)/0.05))),
+    ID, col, o.mat ?? MAT.FLAT, o.id ?? idCoat, 1, INK);
+  for(const sx of [1,-1]){                                           // lapels, pockets with flaps
+    B.add(patch(coatP, (u,v) => { const y = 0.79+0.2*v, w = 0.5*smooth(0.79, 0.93, y)*(y > 0.925 && y < 0.944 ? 0.6 : 1); return [sx*(G+0.012+w*u), y]; }, 0.008, axisRef, 5, 16),
+      ID, C.lapel, MAT.COAT, nid(), 1, INK);
+    sew(sx*80, sx*112, 0.40, 0.555, C.coat, {off:0.010, id:nid(), mat:MAT.COAT, nu:6, nv:4});
+    sew(sx*78, sx*114, 0.545, 0.60, C.coat, {off:0.015, id:nid(), mat:MAT.COAT, nu:6, nv:2});
   }
-  // legs and skates
-  for(const [sx, part] of [[-1,5],[1,6]]){
-    const cx = sx*HIP[0], idL = nid(), idB = nid();
-    limb(B, [cx,.215,.005], [cx,.53,0], .085, .07, denim, MAT.DENIM, idL, part, INK, 10, true);
-    B.add(SPH[2], mm(T(cx,.142,-.012), Sc(.064,.058,.128)), cream, MAT.BOOT, idB, part, INK);
-    limb(B, [cx,.13,.032], [cx,.262,.03], .06, .063, cream, MAT.BOOT, idB, part, INK, 10, true);
-    B.add(BOX, mm(T(cx,.089,-.008), Sc(.122,.022,.262)), sole, MAT.BOOT, nid(), part, INK);
-    B.add(SPH[0], mm(T(cx,.062,-.132), Sc(.024)), hex('#eaa3ad'), MAT.FLAT, nid(), part, INK);
-    for(const wxo of [-1,1]) for(const wz of [-.078,.07])
-      B.add(CYL(10,1,true,true), mm(T(cx+wxo*.052, .037, wz), RZ(Math.PI/2), T(0,-.024,0), Sc(.037,.048,.037)), wheel, MAT.FLAT, nid(), part, INK);
+  sew(G/DEG+30, 360-G/DEG-30, 0.972, 1.012, C.lapel, {off:0.008, id:nid(), mat:MAT.COAT, nu:30, nv:2});      // collar
+  sew(102, 258, 0.866, 0.872, C.seam, {nu:24, nv:1});                                                      // back yoke seam
+  sew(211.4, 212.6, 0.30, 0.866, C.seam, {nu:1, nv:12}); sew(147.4, 148.6, 0.47, 0.866, C.seam, {nu:1, nv:9});
+  for(let a = G/DEG+3; a < 360-G/DEG-6; a += 8) sew(a, a+4.4, 0.262, 0.268, C.lapel, {nu:1, nv:1});       // topstitching round the hem
+  const L = C.lav, H = C.lavHi, Tl = C.teal;
+  for(const [a0,a1,y0,y1,col] of [                                   // the lavender and teal patchwork, read off the sheet
+    [176.5,183.5,0.885,0.925,L],[177,183,0.93,0.948,H],[170,175,0.905,0.918,Tl],
+    [176.5,183.5,0.555,0.60,L],[176.5,183.5,0.515,0.55,H],[176.5,183.5,0.485,0.51,Tl],[176.5,183.5,0.43,0.48,L],[172,176.5,0.497,0.502,L],
+    [226,232,0.33,0.366,L],[232,236.5,0.347,0.388,H],[224,238,0.322,0.326,Tl],[236.5,237.5,0.30,0.40,Tl],
+    [124,130,0.30,0.345,L],[130,134.5,0.33,0.39,H],[122,138,0.36,0.364,Tl],[127.5,128.5,0.28,0.41,Tl],[134.5,139,0.375,0.40,L],
+    [150,165,0.905,0.909,Tl],[156,160,0.915,0.94,L],[196,206,0.60,0.604,Tl],[198,203,0.61,0.632,H],[218,226,0.74,0.744,Tl],[219,223,0.70,0.735,L],
+    [-58,-37,0.862,0.866,Tl],[-58,-37,0.80,0.804,Tl],[-58,-56.6,0.80,0.866,Tl],[-38.4,-37,0.80,0.866,Tl],[-52,-44,0.815,0.85,H],[-49,-45,0.82,0.838,L],
+    [-52,-43,0.36,0.40,L],[-43,-38,0.375,0.415,H],[-56,-36,0.345,0.349,Tl],[-60,-50,0.68,0.684,Tl],[-57,-53,0.64,0.675,L],
+    [36,52,0.52,0.524,Tl],[40,47,0.53,0.56,L],[47,51,0.50,0.52,H],[38,50,0.335,0.339,Tl],[41,46,0.345,0.375,H],
+    [86,92,0.46,0.49,L],[92,97,0.475,0.515,H],[-95,-88,0.44,0.47,H],[-101,-95,0.455,0.50,L],[-104,-84,0.51,0.514,Tl]])
+    sew(a0, a1, y0, y1, col);
+
+  /* ----- under the coat: top, midriff, belt, jeans ----- */
+  B.add(lathe([[0.097,0.815],[0.106,0.86],[0.112,0.91],[0.108,0.95],[0.082,0.978],[0.046,0.99]], 22), Sc(1,1,0.74), C.top, MAT.TOP, nid(), 1, INK);
+  B.add(lathe([[0.089,0.77],[0.086,0.80],[0.094,0.835]], 18), Sc(1,1,0.76), C.skin, MAT.SKIN, nid(), 1, INK);
+  B.add(CYL(14,0.96,false,false), mm(T(0,0.965,0), Sc(0.043,0.1,0.043)), C.skin, MAT.SKIN, nid(), 1, INK);       // neck
+  B.add(lathe([[0.066,0.60],[0.104,0.63],[0.113,0.68],[0.107,0.74],[0.097,0.762]], 20), Sc(1,1,0.8), C.denim, MAT.DENIM, nid(), 1, INK);
+  B.add(lathe([[0.1,0.752],[0.103,0.757],[0.103,0.784],[0.1,0.789]], 22), Sc(1,1,0.8), C.belt, MAT.FLAT, nid(), 1, INK);
+  const face = RX(Math.PI/2), bz = -0.103*0.8;
+  B.add(CYL(18,1,true,true), mm(T(0.03,0.77,bz), face, T(0,-0.008,0), Sc(0.031,0.016,0.031)), C.buckle, MAT.ROOF, nid(), 1, INK);   // crescent-moon buckle
+  B.add(CYL(16,1,true,true), mm(T(0.015,0.777,bz), face, T(0,-0.011,0), Sc(0.025,0.022,0.025)), C.belt, MAT.FLAT, nid(), 1, INK);
+  for(const a of [-0.55, 0.75, 2.3, -2.3]) B.add(BOX, mm(T(0.104*Math.sin(a), 0.77, -0.104*0.8*Math.cos(a)), RY(-a), Sc(0.014,0.05,0.006)), C.denim, MAT.FLAT, nid(), 1, INK);
+  const idBeads = nid();
+  for(let k=0;k<14;k++){ const a = k/14*TAU; B.add(SPH[1], mm(T(0.047*Math.sin(a), 0.992-0.006*Math.cos(a), -0.047*Math.cos(a)), Sc(0.0125)), C.choker, MAT.FLAT, idBeads, 1, INK); }
+  const pend = [0, 0.892, -0.092], idChain = nid();
+  for(const sx of [-1,1]) limb(B, [sx*0.043,0.975,-0.03], [0,0.918,-0.09], 0.0035, 0.0035, C.gold, MAT.FLAT, idChain, 1, INK, 5);
+  for(const d of [1,-1]) B.add(CYL(4,0,false,false), mm(T(pend[0],pend[1],pend[2]), RZ(d > 0 ? 0 : Math.PI), Sc(0.011,0.02,0.007)), C.pendant, MAT.FLAT, idChain, 1, INK);
+
+  /* ----- tubes: sleeves and trouser legs ----- */
+  const tube = (S, E, r0, r1, zs = 1) => { const ax = sub(E,S), e1 = norm(cross(ax,[0,0,1])), e2 = norm(cross(ax,e1));
+    return (b, t, d = 0) => { const r = r0+(r1-r0)*t+d, c = Math.cos(b)*r, s = Math.sin(b)*r*zs; return [S[0]+ax[0]*t+e1[0]*c+e2[0]*s, S[1]+ax[1]*t+e1[1]*c+e2[1]*s, S[2]+ax[2]*t+e1[2]*c+e2[2]*s]; }; };
+  const tubeRef = (S, E) => { const ax = sub(E,S), l = dot(ax,ax); return p => { const t = clamp(dot(sub(p,S),ax)/l, 0, 1); return [S[0]+ax[0]*t, S[1]+ax[1]*t, S[2]+ax[2]*t]; }; };
+  const facing = (Pf, ref, t, dir) => { let best = 0, bv = -9; for(let k=0;k<48;k++){ const b = k/48*TAU, q = Pf(b,t), v = dot(norm(sub(q, ref(q))), dir); if(v > bv){ bv = v; best = b; } } return best; };
+
+  for(const [sx, part] of [[-1,3],[1,4]]){                           // arms
+    const S = [sx*SHOULDER[0], SHOULDER[1], 0], E = [sx*0.212, 0.655, -0.012], Pf = tube(S, E, 0.05, 0.064), ref = tubeRef(S, E), id = nid();
+    B.add(grid(16, 8, (u,v) => Pf(u*TAU, v), ref), ID, (x,y) => mixc(C.coatLo, C.coat, smooth(0.6,0.95,y)), MAT.COAT, id, part, INK);
+    B.add(SPH[2], mm(T(S[0],S[1],S[2]), Sc(0.052)), C.coat, MAT.COAT, id, part, INK);
+    B.add(decal(Pf, 0, TAU, 0.9, 1.0, 0.004, ref, 16, 1), ID, C.cuff, MAT.FLAT, nid(), part, INK);
+    B.add(grid(16, 1, (u,v) => Pf(u*TAU, 0.97+0.03*v, -0.012*v-0.006), ref), ID, C.lining, MAT.FLAT, id, part, INK);
+    const ax = norm(sub(E,S));
+    B.add(SPH[2], mm(T(E[0]+ax[0]*0.03, E[1]+ax[1]*0.03, E[2]+ax[2]*0.03), basis(ax), Sc(0.034,0.045,0.027)), C.skin, MAT.SKIN, nid(), part, INK);
+    const out = facing(Pf, ref, 0.5, norm([sx,0,0.35]));              // bars down the outside of the sleeve
+    const bar = (db, t0, t1, col, w = 0.22) => B.add(decal(Pf, out+db-w/2, out+db+w/2, t0, t1, 0.004, ref, 2, 2), ID, col, MAT.FLAT, id, part, INK);
+    if(sx < 0){ bar(0,0.2,0.32,L); bar(0,0.34,0.4,H); bar(0.3,0.26,0.275,Tl,0.5); bar(-0.25,0.45,0.6,H,0.14); bar(0.05,0.62,0.7,L); bar(0.3,0.5,0.512,Tl,0.5); }
+    else { bar(0,0.3,0.42,H); bar(0.25,0.44,0.455,Tl,0.5); bar(-0.1,0.55,0.66,L,0.16); }
+    if(sx < 0){                                                      // her watch, on the left wrist
+      B.add(decal(Pf, 0, TAU, 0.80, 0.875, 0.006, ref, 16, 1), ID, C.watch, MAT.FLAT, nid(), part, INK);
+      const b = facing(Pf, ref, 0.84, norm([-0.5,0,0.86])), q = Pf(b, 0.8375), nrm = norm(sub(q, ref(q)));
+      const at = h => mm(T(q[0]+nrm[0]*h, q[1]+nrm[1]*h, q[2]+nrm[2]*h), basis(nrm));
+      B.add(CYL(18,1,true,true), mm(at(0.002), Sc(0.036,0.012,0.036)), C.watch, MAT.FLAT, nid(), part, INK);
+      B.add(CYL(18,1,true,true), mm(at(0.004), Sc(0.028,0.013,0.028)), C.dial, MAT.FLAT, nid(), part, INK);
+      B.add(BOX, mm(at(0.0175), T(0,0,0.008), Sc(0.004,0.002,0.018)), C.eyeD, MAT.FLAT, nid(), part, 0);
+      B.add(BOX, mm(at(0.0175), T(0.006,0,0), Sc(0.013,0.002,0.004)), C.eyeD, MAT.FLAT, nid(), part, 0);
+    }
   }
-  // head
-  const idHead = nid(), idHair = nid(), HY = 1.07;
-  B.add(SPH[3], mm(T(0,HY,0), Sc(.225,.214,.218)), skin, MAT.SKIN, idHead, 2, INK);
+
+  for(const [sx, part] of [[-1,5],[1,6]]){                           // legs and skates
+    const cx = sx*0.099, S = [sx*HIP[0], 0.675, 0], E = [cx, 0.191, 0], Pf = tube(S, E, 0.066, 0.076, 1.06), ref = tubeRef(S, E), idL = nid();
+    B.add(grid(16, 10, (u,v) => Pf(u*TAU, v), ref), ID, C.denim, MAT.DENIM, idL, part, INK);
+    B.add(SPH[2], mm(T(S[0],S[1],S[2]), Sc(0.066,0.066,0.07)), C.denim, MAT.DENIM, idL, part, INK);
+    B.add(decal(Pf, 0, TAU, 0.925, 1.0, 0.005, ref, 16, 1), ID, C.denimHi, MAT.DENIM, nid(), part, INK);        // turned-up cuff
+    const idBoot = nid();
+    B.add(SPH[2], mm(T(cx,0.153,-0.018), Sc(0.046,0.05,0.098)), C.boot, MAT.BOOT, idBoot, part, INK);
+    B.add(SPH[2], mm(T(cx,0.142,-0.075), Sc(0.044,0.036,0.05)), C.boot, MAT.BOOT, idBoot, part, INK);
+    B.add(CYL(14,1.06,false,false), mm(T(cx,0.13,0.03), Sc(0.043,0.14,0.05)), C.boot, MAT.BOOT, idBoot, part, INK);
+    B.add(CYL(18,1,true,true), mm(T(cx,0.086,-0.012), Sc(0.05,0.028,0.112)), C.sole, MAT.FLAT, nid(), part, INK);
+    for(let k=0;k<4;k++) B.add(BOX, mm(T(cx,0.168+k*0.021,-0.066+k*0.021), RX(-0.75), RZ(k%2 ? 0.35 : -0.35), Sc(0.05,0.007,0.007)), C.lace, MAT.FLAT, nid(), part, INK);
+    B.add(BOX, mm(T(cx,0.07,-0.006), Sc(0.034,0.022,0.17)), C.plate, MAT.FLAT, nid(), part, INK);
+    B.add(CYL(10,0.8,true,true), mm(T(cx,0.03,-0.108), Sc(0.018,0.05,0.018)), C.hub, MAT.FLAT, nid(), part, INK);        // toe stop
+    for(const wz of [-0.068, 0.062]){
+      B.add(CYL(8,1,false,false), mm(T(cx-0.05,0.03,wz), RZ(-Math.PI/2), Sc(0.007,0.1,0.007)), C.plate, MAT.FLAT, nid(), part, INK);
+      for(const wx of [-1,1]){
+        const hubM = mm(T(cx+wx*0.046,0.031,wz), RZ(Math.PI/2));
+        B.add(CYL(14,1,true,true), mm(hubM, T(0,-0.017,0), Sc(0.031,0.034,0.031)), C.wheel, MAT.FLAT, nid(), part, INK);
+        B.add(CYL(10,1,true,true), mm(hubM, T(0,-0.019,0), Sc(0.014,0.038,0.014)), C.hub, MAT.FLAT, nid(), part, INK);
+      }
+    }
+  }
+
+  /* ----- head ----- */
+  const HEAD = {y:1.155, rx:0.172, ry:0.125, rz:0.165}, idHead = nid(), headRef = () => [0, HEAD.y, 0];
+  const faceP = (x, y) => [x, y, -HEAD.rz*Math.sqrt(Math.max(1e-4, 1-(x/HEAD.rx)**2-((y-HEAD.y)/HEAD.ry)**2))];
+  B.add(SPH[3], mm(T(0,HEAD.y,0), Sc(HEAD.rx,HEAD.ry,HEAD.rz)), C.skin, MAT.SKIN, idHead, 2, INK);
+  const oval = (cx, cy, w, h, off, col, o = {}) => { const a0 = o.a0 ?? 0, a1 = o.a1 ?? TAU, r0 = o.r0 ?? 0, r1 = o.r1 ?? 1;
+    B.add(patch(faceP, (u,v) => { const t = a0+(a1-a0)*u, r = r0+(r1-r0)*v; return [cx+w*r*Math.cos(t), cy+h*r*Math.sin(t)]; }, off, headRef, o.nu ?? 20, o.nv ?? 3), ID, col, MAT.FLAT, idHead, 2, INK); };
   for(const sx of [-1,1]){
-    B.add(CYL(8,0,false,false), mm(T(sx*.2,HY-.03,.03), RZ(-sx*(Math.PI/2-.2)), Sc(.055,.2,.032)), mixc(skin, hex('#f6c3b4'), .35), MAT.SKIN, nid(), 2, INK);
-    B.add(SPH[1], mm(T(sx*.083,HY-.022,-.203), Sc(.027,.037,.012)), hex('#5b3a36'), MAT.FLAT, idHead, 2, INK);
-    B.add(SPH[0], mm(T(sx*.128,HY-.072,-.176), Sc(.036,.02,.01)), hex('#f6b9bb'), MAT.FLAT, idHead, 2, 0);
+    const ex = sx*0.076, ey = 1.11, w = 0.036, h = 0.052;
+    oval(ex, ey, w, h, 0.003, (x,y) => { const t = (y-(ey-h))/(2*h); return t < 0.42 ? mixc(C.eyeL, C.eyeM, t/0.42) : mixc(C.eyeM, C.eyeD, clamp((t-0.42)/0.3, 0, 1)); }, {nv:5});
+    oval(ex, ey+0.008, w*0.5, h*0.5, 0.004, hex('#2c1c16'));
+    oval(ex, ey, w, h, 0.005, C.eyeD, sx > 0 ? {a0:-0.25, a1:Math.PI-0.3, r0:0.9, r1:1.17} : {a0:0.3, a1:Math.PI+0.25, r0:0.9, r1:1.17});      // upper lash
+    oval(ex, ey, w, h, 0.005, hex('#8b5a3c'), {a0:Math.PI+0.5, a1:TAU-0.5, r0:0.93, r1:1.07, nv:1});
+    oval(ex-0.005, ey+0.026, 0.0075, 0.012, 0.0065, C.white, {nu:10, nv:1});
+    oval(ex+0.009, ey-0.022, 0.005, 0.006, 0.0065, hex('#ffe9c4'), {nu:8, nv:1});
+    oval(sx*0.118, 1.066, 0.03, 0.012, 0.002, C.blush, {nu:14, nv:2});
+    const ed = norm([sx, -0.04, 0.16]);                              // pointed ears, out through the hair
+    B.add(CYL(8,0,false,false), mm(T(sx*0.175,1.094,0.012), basis(ed), Sc(0.013,0.128,0.038)), C.ear, MAT.SKIN, nid(), 2, INK);
+    B.add(CYL(8,0,false,false), mm(T(sx*0.178,1.093,0.004), basis(ed), Sc(0.007,0.098,0.022)), C.earIn, MAT.FLAT, nid(), 2, 0);
   }
-  const hairCol = (x,y) => mixc(blondD, blond, smooth(.75,1.2,y));
-  B.add(sphere(20, 12, (x,y,z) => y > 0.1 || z > -0.32), mm(T(0,HY+.025,.018), Sc(.268,.252,.265)), hairCol, MAT.HAIR, idHair, 2, INK);
-  B.add(lathe([[.338,.735],[.326,.79],[.306,.88],[.288,.98],[.268,1.095]], 72, Math.PI/2-2.3, Math.PI/2+2.3,
-      (th,j,r,y) => j === 0 ? [r+.012*Math.sin(th*11+1), y+.022*Math.sin(th*11)] : j === 1 ? [r, y+.008*Math.sin(th*11)] : [r,y]),
-    mm(T(0,0,.014), Sc(1,1,.93)), hairCol, MAT.HAIR, idHair, 2, INK);
+  oval(0, 1.062, 0.007, 0.0045, 0.003, C.mouth, {nu:8, nv:1});
+
+  /* ----- hair: a dome over the head, bangs cut short in front, wavy locks everywhere else ----- */
+  const HC = [0, 1.163, 0.012], HRX = 0.259, HRY = 0.287, HRZF = 0.2, HRZB = 0.25, POLE = HC[1]+HRY, AB = 0.72, idHair = nid();
+  const hairP = (a, y, shrink = 0) => {
+    let s = 1;
+    if(y >= HC[1]) s = Math.sqrt(Math.max(0, 1-((y-HC[1])/HRY)**2));
+    else { const k = clamp((HC[1]-y)/(HC[1]-0.93), 0, 1.2); s = (1 - 0.27*smooth(0,0.6,k) + 0.11*smooth(0.7,1,k))*(1 + 0.04*Math.cos(a*9+0.5)*k); }
+    return [(HRX-shrink)*s*Math.sin(a), y, -((Math.cos(a) > 0 ? HRZF : HRZB)-shrink)*s*Math.cos(a) + HC[2]];
+  };
+  const hairRef = p => [0, Math.min(p[1], HC[1]), HC[2]];
+  const hairCol = (x,y) => mixc(mixc(C.hairLo, C.hair, smooth(0.93,1.2,y)), C.hairHi, 0.55*smooth(1.28,1.45,y));
+  const drop = v => 0.55*(1-Math.cos(v*Math.PI/2)) + 0.45*v;
+  const hemY = a => { const f = Math.abs(Math.atan2(Math.sin(a), Math.cos(a))), w = Math.sin(a*9+0.5); return mixc([0.978+0.03*w], [0.952+0.032*w], smooth(1.2,1.7,f))[0]; };
+  const tips = [[0.55,0.17,0.03],[0.28,0.2,0.03],[-0.02,0.17,0.062],[-0.3,0.19,0.03],[-0.57,0.17,0.03]];
+  const bangY = a => { let d = 0; for(const [c,w,dp] of tips) d = Math.max(d, dp*Math.pow(Math.max(0, 1-Math.abs(a-c)/w), 0.8)); return 1.186 - d; };
+  B.add(grid(100, 22, (u,v) => { const a = AB+(TAU-2*AB)*u; return hairP(a, POLE-(POLE-hemY(a))*drop(v)); }, hairRef), ID, hairCol, MAT.HAIR, idHair, 2, INK);
+  B.add(grid(100, 14, (u,v) => { const a = AB+(TAU-2*AB)*u; return hairP(a, HC[1]+0.1-(HC[1]+0.1-hemY(a)-0.004)*v, 0.014); }, hairRef), ID, C.hairIn, MAT.HAIR, idHair, 2, INK);
+  B.add(grid(44, 12, (u,v) => { const a = -AB+2*AB*u; return hairP(a, POLE-(POLE-bangY(a))*drop(v), -0.004); }, hairRef), ID, hairCol, MAT.HAIR, idHair, 2, INK);
+
+  /* ----- the charms in her hair ----- */
+  const onHair = (a, y, lift = 0.006, roll = 0) => { const e = 1e-3, p = hairP(a,y);
+    let n = norm(cross(sub(hairP(a+e,y), hairP(a-e,y)), sub(hairP(a,y+e), hairP(a,y-e)))); if(dot(n, sub(p, HC)) < 0) n = [-n[0],-n[1],-n[2]];
+    const up = n[1], Y = norm([-n[0]*up, 1-n[1]*up, -n[2]*up]), X = cross(Y, n);
+    return mm(new Float32Array([X[0],X[1],X[2],0, Y[0],Y[1],Y[2],0, n[0],n[1],n[2],0, p[0]+n[0]*lift, p[1]+n[1]*lift, p[2]+n[2]*lift, 1]), RZ(roll)); };
+  const charm = (prim, M, col, id = nid()) => B.add(prim, M, col, MAT.FLAT, id, 2, INK);
+  const bowPts = [[0,0.22],[1,0.86],[1.16,0],[1,-0.86],[0,-0.22],[-1,-0.86],[-1.16,0],[-1,0.86]];
+  const bow = (M, s, col) => { const id = nid();
+    charm(prism(bowPts.map(q => [q[0]*s, q[1]*s]), 0.012), M, col, id);
+    for(const d of [-1,1]) charm(prism([[0,0],[d*0.55*s,-1.55*s],[d*0.12*s,-1.7*s],[-d*0.12*s,-0.3*s]], 0.008), mm(M, T(0,-0.1*s,-0.003)), col, id);
+    charm(SPH[1], mm(M, T(0,0,0.005), Sc(0.3*s,0.34*s,0.012)), mixc(col,[1,1,1],0.25), nid()); };
+  bow(onHair(-0.2, 1.37), 0.043, C.bowTeal);
+  bow(onHair(0.95, 1.287, 0.006, 0.15), 0.036, C.bowPink);
+  const starPts = []; for(let k=0;k<10;k++){ const a = k/10*TAU+Math.PI/2, r = k%2 ? 0.48 : 1; starPts.push([Math.cos(a)*r*0.043, Math.sin(a)*r*0.043]); }
+  charm(prism(starPts, 0.013), onHair(-0.74, 1.325, 0.006, -0.12), C.star);
+  { const M = onHair(-0.4, 1.258, 0.006, 0.1), s = 0.042, pts = [], id = nid();                              // umbrella
+    for(let k=0;k<=12;k++){ const a = Math.PI*k/12; pts.push([Math.cos(a)*s, Math.sin(a)*s*0.78]); }
+    for(const [x,y] of [[-0.67,0.16],[-0.33,0],[0,0.16],[0.33,0],[0.67,0.16]]) pts.push([x*s, y*s]);
+    charm(prism(pts, 0.012), M, C.brolly, id);
+    charm(BOX, mm(M, T(0,-0.42*s,-0.002), Sc(0.1*s,1.05*s,0.007)), C.brolly, id);
+    charm(SPH[0], mm(M, T(0,-0.98*s,0), Sc(0.15*s)), C.brolly, id); charm(SPH[0], mm(M, T(0,0.86*s,0), Sc(0.1*s)), C.brolly, id); }
+  { const M = onHair(-0.68, 1.207, 0.006, 0.32), pts = [], id = nid();                                       // barrette
+    for(let k=0;k<=8;k++){ const a = -Math.PI/2+Math.PI*k/8; pts.push([0.028+Math.cos(a)*0.011, Math.sin(a)*0.011]); }
+    for(let k=0;k<=8;k++){ const a = Math.PI/2+Math.PI*k/8; pts.push([-0.03+Math.cos(a)*0.006, Math.sin(a)*0.006]); }
+    charm(prism(pts, 0.009), M, C.clip, id);
+    charm(BOX, mm(M, T(0.004,0,0.005), Sc(0.04,0.004,0.003)), mixc(C.clip,[1,1,1],0.5), id); }
+  { const M = onHair(-1.02, 1.2, 0.008), id = nid();                                                          // bunny
+    charm(SPH[1], mm(M, Sc(0.018,0.016,0.009)), C.bunny, id);
+    for(const d of [-1,1]){ charm(SPH[1], mm(M, T(d*0.008,0.024,0), RZ(-d*0.2), Sc(0.0055,0.014,0.006)), C.bunny, id);
+      charm(SPH[0], mm(M, T(d*0.0065,0.001,0.008), Sc(0.0022)), C.eyeD, id); charm(SPH[0], mm(M, T(d*0.008,-0.03,0), Sc(0.006,0.007,0.006)), C.bunny, id); }
+    charm(SPH[1], mm(M, T(0,-0.021,0), Sc(0.012,0.011,0.008)), C.bunny, id); }
 }
 
 planTrees();
@@ -831,7 +1012,7 @@ const reduce = window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)
 const Z0 = -4, Z1 = -160;
 const S = { cell:17, amt:1, ink:1, paper:1, compare:false, split:0.5, paused:reduce,
   z: Q.has('z') ? +Q.get('z') : Z0, time:0, phase: +Q.get('phase') || 0, fadeIn:0,
-  yaw: Q.has('yaw') ? +Q.get('yaw') : 0, pitch: Q.has('pitch') ? +Q.get('pitch') : -0.1, dist: Q.has('dist') ? +Q.get('dist') : 3.3,
+  yaw: Q.has('yaw') ? +Q.get('yaw') : 0, pitch: Q.has('pitch') ? +Q.get('pitch') : -0.1, dist: Q.has('dist') ? +Q.get('dist') : 3.5,
   camYaw:0, scale:1 };
 if(Q.has('pause')) S.paused = true;
 if(Q.has('split')){ S.compare = true; S.split = +Q.get('split'); }
@@ -855,14 +1036,14 @@ function pose(gx, gz, yaw){
   const s = Math.sin(S.phase), sp = Math.pow(Math.max(s,0),1.4), sn = Math.pow(Math.max(-s,0),1.4);
   const root = mm(T(gx, 0.012*Math.cos(S.phase*2), gz), RY(yaw));
   const piv = (p, M) => mm(T(p[0],p[1],p[2]), M, T(-p[0],-p[1],-p[2]));
-  const torso = mm(root, T(0.03*s,0,0), piv(TORSO, mm(RZ(-0.06*s), RX(-0.13))));
+  const torso = mm(root, T(0.028*s,0,0), piv(TORSO, mm(RZ(-0.05*s), RX(-0.1))));
   const set = (i, M) => parts.set(M, i*16);
   set(0, I4()); set(1, torso);
-  set(2, mm(torso, piv(NECK, mm(RZ(0.05*s), RX(0.1)))));
-  set(3, mm(torso, piv([-SHOULDER[0],SHOULDER[1],0], mm(RX(0.42*s), RZ(-0.06)))));
-  set(4, mm(torso, piv([SHOULDER[0],SHOULDER[1],0], mm(RX(-0.42*s), RZ(0.06)))));
-  set(5, mm(root, T(0.03*s,0,0), piv([-HIP[0],HIP[1],0], mm(RX(0.5*sp-0.14*sn), RZ(-0.24*sp)))));
-  set(6, mm(root, T(0.03*s,0,0), piv([HIP[0],HIP[1],0], mm(RX(0.5*sn-0.14*sp), RZ(0.24*sn)))));
+  set(2, mm(torso, piv(NECK, mm(RZ(0.045*s), RX(0.085)))));
+  set(3, mm(torso, piv([-SHOULDER[0],SHOULDER[1],0], mm(RX(0.36*s), RZ(-0.05)))));
+  set(4, mm(torso, piv([SHOULDER[0],SHOULDER[1],0], mm(RX(-0.36*s), RZ(0.05)))));
+  set(5, mm(root, T(0.028*s,0,0), piv([-HIP[0],HIP[1],0], mm(RX(0.3*sp-0.1*sn), RZ(-0.12*sp)))));
+  set(6, mm(root, T(0.028*s,0,0), piv([HIP[0],HIP[1],0], mm(RX(0.3*sn-0.1*sp), RZ(0.12*sn)))));
 }
 
 let last = 0, slow = 0, frames = 0;
@@ -877,6 +1058,11 @@ function frame(now){
     S.fadeIn = Math.max(0, S.fadeIn - dt/1.1);
     if(S.z < Z1){ S.z = Z0; S.fadeIn = 1; S.camYaw = 0; }
   }
+  if(goal){                                                // easing toward the Front / Back view
+    const k = 1 - Math.exp(-dt*5);
+    S.yaw += (goal.yaw-S.yaw)*k; S.pitch += (goal.pitch-S.pitch)*k; S.dist += (goal.dist-S.dist)*k;
+    if(Math.abs(goal.yaw-S.yaw) < 0.002 && Math.abs(goal.dist-S.dist) < 0.004) goal = null;
+  }
   const gz = S.z, gx = pathX(gz), psi = Math.atan(pathSlope(gz));
   S.camYaw += (psi - S.camYaw)*(1 - Math.exp(-dt*2.2));
   pose(gx, gz, psi);
@@ -885,8 +1071,8 @@ function frame(now){
   const fov = 0.66 + 0.27*clamp((1.25-asp)/0.6, 0, 1);
   const Y = S.camYaw + S.yaw, P = S.pitch;
   const right = [Math.cos(Y), 0, -Math.sin(Y)];
-  const truck = clamp((asp-1.1)*0.9, 0, 0.62)*S.dist/3.3;
-  const tgt = [gx + right[0]*truck, 0.95, gz + right[2]*truck];
+  const truck = clamp((asp-1.1)*0.9, 0, 0.62)*S.dist/3.5;
+  const tgt = [gx + right[0]*truck, 1.0, gz + right[2]*truck];
   const eye = [tgt[0] + S.dist*Math.sin(Y)*Math.cos(P), tgt[1] + S.dist*Math.sin(P), tgt[2] + S.dist*Math.cos(Y)*Math.cos(P)];
   eye[1] = Math.max(eye[1], groundH(eye[0], eye[2]) + 0.2);
   const V = lookAt(eye, tgt, [0,1,0]), VP = mul(persp(fov, asp, NEAR, FAR), V);
@@ -966,21 +1152,25 @@ grip.addEventListener('pointermove', e => {
 grip.addEventListener('keydown', e => {
   if(e.key === 'ArrowLeft' || e.key === 'ArrowRight'){ S.split = clamp(S.split + (e.key === 'ArrowLeft' ? -0.03 : 0.03), 0.04, 0.96); syncUi(); e.preventDefault(); }
 });
+const turnBtn = $('turn'), BACK = {yaw:0, pitch:-0.1, dist:3.5}, FRONT = {yaw:2.85, pitch:0.0, dist:3.0};
+let goal = null, atFront = false;
+const setView = front => { atFront = front; goal = front ? FRONT : BACK; turnBtn.textContent = front ? 'Back view' : 'Front view'; S.yaw = Math.atan2(Math.sin(S.yaw), Math.cos(S.yaw)); };
+turnBtn.addEventListener('click', () => setView(!atFront));
 const ptrs = new Map(); let pinch = 0;
-canvas.addEventListener('pointerdown', e => { canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]); pinch = 0; });
+canvas.addEventListener('pointerdown', e => { goal = null; canvas.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, [e.clientX, e.clientY]); pinch = 0; });
 canvas.addEventListener('pointermove', e => {
   const p = ptrs.get(e.pointerId); if(!p) return;
   const dx = e.clientX-p[0], dy = e.clientY-p[1]; p[0] = e.clientX; p[1] = e.clientY;
   if(ptrs.size === 1){ S.yaw -= dx*0.006; S.pitch = clamp(S.pitch + dy*0.005, -0.3, 1.2); }
   else if(ptrs.size === 2){
     const [a, b] = [...ptrs.values()], d = Math.hypot(a[0]-b[0], a[1]-b[1]);
-    if(pinch) S.dist = clamp(S.dist*pinch/d, 1.7, 9); pinch = d;
+    if(pinch) S.dist = clamp(S.dist*pinch/d, 1.2, 9); pinch = d;
   }
 });
 const drop = e => { ptrs.delete(e.pointerId); pinch = 0; };
 canvas.addEventListener('pointerup', drop); canvas.addEventListener('pointercancel', drop);
-canvas.addEventListener('wheel', e => { S.dist = clamp(S.dist*Math.exp(e.deltaY*0.0012), 1.7, 9); e.preventDefault(); }, {passive:false});
-canvas.addEventListener('dblclick', () => { S.yaw = 0; S.pitch = -0.1; S.dist = 3.3; });
+canvas.addEventListener('wheel', e => { goal = null; S.dist = clamp(S.dist*Math.exp(e.deltaY*0.0012), 1.2, 9); e.preventDefault(); }, {passive:false});
+canvas.addEventListener('dblclick', () => setView(false));
 syncUi();
 requestAnimationFrame(frame);
 })();

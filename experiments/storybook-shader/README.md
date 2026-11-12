@@ -30,7 +30,18 @@ Everything is in `index.html`. The shader is the first block of the script:
 | `FS_POST` | One full-screen pass: ink outlines, paper grain, border. |
 | `defMat(...)` | Per-material settings: second colour, cell size, stretch, line colour and strength. |
 
-The rest of the file is a throwaway demo scene built from spheres, tubes and boxes.
+| `buildGirl(...)` | The skater, modelled by hand from her character sheet: hair, face, charms, coat pattern, skates. |
+
+The scenery (trees, arches, city) is a throwaway demo set built from spheres, tubes and boxes.
+
+## The skater
+
+She is built in code, not loaded from a model file. Her hair, coat, sleeves and trouser
+legs are surfaces defined by a formula (`grid`), and every detail on them (eyes, lapels,
+pockets, the lavender and teal coat pattern, the watch strap) is a small patch laid just
+above that surface (`patch` / `decal`). She has seven rigid parts (torso, head, two arms,
+two legs) that `pose()` moves for the skating stride. The **Front view** button swings
+the camera round to her face.
 
 ## Moving it into a real game
 
