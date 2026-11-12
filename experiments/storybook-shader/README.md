@@ -29,7 +29,6 @@ Everything is in `index.html`. The shader is the first block of the script:
 | `FS_SURFACE` | Runs on every mesh: light, cells, cell lines, haze. Also writes normal, object id and ink weight for the outlines. |
 | `FS_POST` | One full-screen pass: ink outlines, paper grain, border. |
 | `defMat(...)` | Per-material settings: second colour, cell size, stretch, line colour and strength. |
-
 | `buildGirl(...)` | The skater, modelled by hand from her character sheet: hair, face, charms, coat pattern, skates. |
 
 The scenery (trees, arches, city) is a throwaway demo set built from spheres, tubes and boxes.
